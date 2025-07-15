@@ -1,0 +1,18 @@
+[package]
+name = "ftdi-tools"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitfield-struct = "0.11.0"
+eh1 = { package = "embedded-hal", version = "1" }
+futures-lite = "2.6.0"
+log = "0.4.27"
+nusb = "0.1.14"
+thiserror = "2.0.12"
+
+[dev-dependencies]
+anyhow = "1.0.98"
+env_logger = "0.11.8"
+itertools = "0.14.0"
+lm75 = "1.0.0"
