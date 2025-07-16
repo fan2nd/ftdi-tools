@@ -7,22 +7,22 @@ use std::sync::{Arc, Mutex};
 ///
 /// Represents a single GPIO pin configured as output. Manages pin state and
 /// ensures proper cleanup through Drop implementation.
-pub struct OutputPin {
+pub struct FtdiOutputPin {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// GPIO pin identifier
     pin: Pin,
 }
 
-impl Drop for OutputPin {
+impl Drop for FtdiOutputPin {
     fn drop(&mut self) {
         let mut lock = self.mtx.lock().unwrap();
         lock.free_pin(self.pin);
     }
 }
 
-impl OutputPin {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<OutputPin, FtdiError> {
+impl FtdiOutputPin {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<FtdiOutputPin, FtdiError> {
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         lock.alloc_pin(pin, PinUse::Input);
@@ -38,7 +38,7 @@ impl OutputPin {
         }
         lock.write_read(cmd.as_slice(), &mut [])?;
         drop(lock);
-        Ok(OutputPin { mtx, pin })
+        Ok(FtdiOutputPin { mtx, pin })
     }
 
     pub(crate) fn set(&self, state: bool) -> Result<(), FtdiError> {
@@ -74,11 +74,11 @@ impl eh1::digital::Error for FtdiError {
     }
 }
 
-impl eh1::digital::ErrorType for OutputPin {
+impl eh1::digital::ErrorType for FtdiOutputPin {
     type Error = FtdiError;
 }
 
-impl eh1::digital::OutputPin for OutputPin {
+impl eh1::digital::OutputPin for FtdiOutputPin {
     fn set_low(&mut self) -> Result<(), FtdiError> {
         self.set(false)
     }
@@ -92,22 +92,22 @@ impl eh1::digital::OutputPin for OutputPin {
 ///
 /// Represents a single GPIO pin configured as input. Provides methods to read
 /// pin state and ensures proper cleanup through Drop implementation.
-pub struct InputPin {
+pub struct FtdiInputPin {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// GPIO pin index.
     pin: Pin,
 }
 
-impl Drop for InputPin {
+impl Drop for FtdiInputPin {
     fn drop(&mut self) {
         let mut lock = self.mtx.lock().unwrap();
         lock.free_pin(self.pin);
     }
 }
 
-impl InputPin {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<InputPin, FtdiError> {
+impl FtdiInputPin {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<FtdiInputPin, FtdiError> {
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         lock.alloc_pin(pin, PinUse::Input);
@@ -123,7 +123,7 @@ impl InputPin {
         }
         lock.write_read(cmd.as_slice(), &mut [])?;
         drop(lock);
-        Ok(InputPin { mtx, pin })
+        Ok(FtdiInputPin { mtx, pin })
     }
 
     pub(crate) fn get(&self) -> Result<bool, FtdiError> {
@@ -141,11 +141,11 @@ impl InputPin {
     }
 }
 
-impl eh1::digital::ErrorType for InputPin {
+impl eh1::digital::ErrorType for FtdiInputPin {
     type Error = FtdiError;
 }
 
-impl eh1::digital::InputPin for InputPin {
+impl eh1::digital::InputPin for FtdiInputPin {
     fn is_high(&mut self) -> Result<bool, Self::Error> {
         self.get()
     }

@@ -23,7 +23,7 @@ pub enum SpiMode {
 /// Serial Peripheral Interface (SPI) master controller using FTDI MPSSE
 ///
 /// Implements full-duplex synchronous serial communication with configurable mode
-pub struct Spi {
+pub struct FtdiSpi {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Initial value of SCK line (clock polarity) - determines idle state
@@ -32,7 +32,7 @@ pub struct Spi {
     is_lsb: bool,
 }
 
-impl Drop for Spi {
+impl Drop for FtdiSpi {
     fn drop(&mut self) {
         let mut lock = self.mtx.lock().unwrap();
         lock.free_pin(Pin::Lower(0));
@@ -41,8 +41,8 @@ impl Drop for Spi {
     }
 }
 
-impl Spi {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Spi, FtdiError> {
+impl FtdiSpi {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiSpi, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::Spi);
@@ -57,7 +57,7 @@ impl Spi {
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             lock.write_read(cmd.as_slice(), &mut [])?;
         }
-        Ok(Spi {
+        Ok(FtdiSpi {
             mtx,
             tck_init_value: false,
             is_lsb: false,
@@ -90,11 +90,11 @@ impl Error for FtdiError {
     }
 }
 
-impl ErrorType for Spi {
+impl ErrorType for FtdiSpi {
     type Error = FtdiError;
 }
 
-impl SpiBus<u8> for Spi {
+impl SpiBus<u8> for FtdiSpi {
     fn read(&mut self, words: &mut [u8]) -> Result<(), Self::Error> {
         let mut cmd = MpsseCmdBuilder::new();
         cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, words.len());

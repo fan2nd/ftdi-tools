@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use eh1::spi::SpiBus;
-use ftdi_tools::{FtdiMpsse, OutputPin, Pin, Spi, list_all_device};
+use eh1::{digital::OutputPin, spi::SpiBus};
+use ftdi_tools::{FtdiMpsse, FtdiOutputPin, FtdiSpi, Pin, list_all_device};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -9,15 +9,15 @@ fn main() -> anyhow::Result<()> {
     assert!(!devices.is_empty(), "Not found Ftdi devices");
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
     let mtx = Arc::new(Mutex::new(mpsse));
-    let mut spi = Spi::new(mtx.clone())?;
-    let gpio = OutputPin::new(mtx, Pin::Lower(3))?;
-    gpio.set(true)?;
+    let mut spi = FtdiSpi::new(mtx.clone())?;
+    let mut gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
+    gpio.set_high()?;
     {
         let read_buf = &mut [0; 3];
-        gpio.set(false)?;
+        gpio.set_low()?;
         spi.write(&[0x9f])?;
         spi.read(read_buf)?;
-        gpio.set(true)?;
+        gpio.set_high()?;
         println!("Manufacturer ID:{:#x?}", read_buf[0]);
         println!(
             "Device ID:{:#x?}",

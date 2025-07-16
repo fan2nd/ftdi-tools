@@ -1,17 +1,14 @@
+use self::cmd::I2cCmdBuilder;
 use crate::ftdaye::FtdiError;
-use crate::i2c::cmd::I2cCmdBuilder;
 use crate::mpsse_cmd::MpsseCmdBuilder;
 use crate::{FtdiMpsse, Pin, PinUse};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 
-// because i2c is msb
-const SLAVE_ACK_MASK: u8 = 1 << 0;
-
 /// Inter-Integrated Circuit (I2C) master controller using FTDI MPSSE
 ///
 /// Implements I2C bus communication with support for start/stop conditions and clock stretching
-pub struct I2c {
+pub struct FtdiI2c {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Length of start, repeated start, and stop conditions in MPSSE commands
@@ -21,7 +18,7 @@ pub struct I2c {
     direction_pin: Option<Pin>,
 }
 
-impl Drop for I2c {
+impl Drop for FtdiI2c {
     fn drop(&mut self) {
         let mut cmd = MpsseCmdBuilder::new();
         cmd.enable_3phase_data_clocking(false);
@@ -36,8 +33,8 @@ impl Drop for I2c {
     }
 }
 
-impl I2c {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<I2c, FtdiError> {
+impl FtdiI2c {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiI2c, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::I2c);
@@ -52,7 +49,7 @@ impl I2c {
             cmd.enable_3phase_data_clocking(true);
             lock.write_read(cmd.as_slice(), &mut [])?;
         }
-        let this = I2c {
+        let this = FtdiI2c {
             mtx,
             start_stop_cmds: 3,
             direction_pin: None,
@@ -115,6 +112,8 @@ impl I2c {
         address: u8,
         operations: &mut [Operation<'_>],
     ) -> Result<(), ErrorKind> {
+        // because i2c is msb
+        const SLAVE_ACK_MASK: u8 = 1 << 0;
         // lock at the start to prevent GPIO from being modified while we build
         // the MPSSE command
         let lock = self.mtx.lock().unwrap();
@@ -139,7 +138,7 @@ impl I2c {
 
                         let mut response = [0];
                         lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & 0b1) != 0x00 {
+                        if (response[0] & SLAVE_ACK_MASK) != 0x00 {
                             return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
                         }
                     }
@@ -205,12 +204,12 @@ impl From<FtdiError> for ErrorKind {
     }
 }
 
-impl eh1::i2c::ErrorType for I2c {
+impl eh1::i2c::ErrorType for FtdiI2c {
     type Error = eh1::i2c::ErrorKind;
 }
 
 /// I2C trait implementation for FTDI MPSSE
-impl eh1::i2c::I2c for I2c {
+impl eh1::i2c::I2c for FtdiI2c {
     /// Executes a sequence of I2C operations (read/write) on the specified device
     ///
     /// # Arguments

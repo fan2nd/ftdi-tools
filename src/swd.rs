@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::swd::cmd::SwdCmdBuilder;
+use self::cmd::SwdCmdBuilder;
 use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError};
 #[derive(Debug, Clone, Copy)]
 pub enum SwdAddr {
@@ -21,13 +21,13 @@ impl From<SwdAddr> for u8 {
 }
 /// Serial Wire Debug (SWD) interface controller
 /// Implements ARM Debug Interface v5 communication protocol
-pub struct Swd {
+pub struct FtdiSwd {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Optional direction control pin for SWDIO signal (half-duplex mode)
     direction_pin: Option<Pin>,
 }
-impl Drop for Swd {
+impl Drop for FtdiSwd {
     fn drop(&mut self) {
         let mut lock = self.mtx.lock().unwrap();
         lock.free_pin(Pin::Lower(0));
@@ -38,7 +38,7 @@ impl Drop for Swd {
         }
     }
 }
-impl Swd {
+impl FtdiSwd {
     // Swd ACK (3 bits)
     // LSB[2:0] - 001:成功,010:等待,100:失败
     const REPONSE_SUCCESS: u8 = 0b001;

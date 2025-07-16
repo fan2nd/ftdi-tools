@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Ok;
-use ftdi_tools::{FtdiMpsse, Jtag, list_all_device};
+use ftdi_tools::{FtdiJtag, FtdiMpsse, list_all_device};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
     mpsse.set_frequency(1_000_000)?;
     let mtx = Arc::new(Mutex::new(mpsse));
-    let mut jtag = Jtag::new(mtx)?;
+    let mut jtag = FtdiJtag::new(mtx)?;
     let ids = jtag.scan_with(true)?;
     println!("Scan Result:{ids:x?}");
     println!("Finish Scan Using {:?}", now.elapsed());

@@ -1,6 +1,6 @@
 use crate::ftdaye::FtdiError;
 use crate::mpsse_cmd::MpsseCmdBuilder;
-use crate::{FtdiMpsse, OutputPin, Pin, PinUse};
+use crate::{FtdiMpsse, FtdiOutputPin, Pin, PinUse};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 // TCK(AD0) must be init with value 0.
@@ -119,7 +119,7 @@ impl DerefMut for JtagCmdBuilder {
 }
 /// JTAG (Joint Test Action Group) interface controller
 /// Implements JTAG state machine management and data transfer operations
-pub struct Jtag {
+pub struct FtdiJtag {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Tracks if the JTAG state machine is in idle state
@@ -127,9 +127,9 @@ pub struct Jtag {
     /// Whether adaptive clocking (RTCK) is enabled
     adaptive_clocking: bool,
     /// Optional custom pin assignments for JTAG signals
-    direction: Option<[OutputPin; 4]>,
+    direction: Option<[FtdiOutputPin; 4]>,
 }
-impl Drop for Jtag {
+impl Drop for FtdiJtag {
     fn drop(&mut self) {
         self.adaptive_clock(false).unwrap();
         let mut lock = self.mtx.lock().unwrap();
@@ -139,7 +139,7 @@ impl Drop for Jtag {
         lock.free_pin(Pin::Lower(3));
     }
 }
-impl Jtag {
+impl FtdiJtag {
     /// Creates a new JTAG interface instance
     ///
     /// # Arguments
@@ -221,10 +221,10 @@ impl Jtag {
         tdo: Pin,
         tms: Pin,
     ) -> Result<(), FtdiError> {
-        let tck = OutputPin::new(self.mtx.clone(), tck)?;
-        let tdi = OutputPin::new(self.mtx.clone(), tdi)?;
-        let tdo = OutputPin::new(self.mtx.clone(), tdo)?;
-        let tms = OutputPin::new(self.mtx.clone(), tms)?;
+        let tck = FtdiOutputPin::new(self.mtx.clone(), tck)?;
+        let tdi = FtdiOutputPin::new(self.mtx.clone(), tdi)?;
+        let tdo = FtdiOutputPin::new(self.mtx.clone(), tdo)?;
+        let tms = FtdiOutputPin::new(self.mtx.clone(), tms)?;
         tck.set(true)?;
         tdi.set(true)?;
         tdo.set(false)?;
@@ -237,7 +237,7 @@ impl Jtag {
         cmd.jtag_any2idle();
         let lock = self.mtx.lock().unwrap();
         lock.write_read(cmd.as_slice(), &mut [])?;
-        self.is_ilde = true;
+        self.is_idle = true;
         Ok(())
     }
     pub fn scan_with(&mut self, tdi: bool) -> Result<Vec<Option<u32>>, FtdiError> {
@@ -295,7 +295,7 @@ impl Jtag {
     pub fn write(&self, ir: &[u8], irlen: usize, dr: &[u8], drlen: usize) -> Result<(), FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_ilde {
+        if !self.is_idle {
             cmd.jtag_any2idle();
         }
         cmd.jtag_idle2ir()
@@ -311,7 +311,7 @@ impl Jtag {
     pub fn read(&self, ir: &[u8], irlen: usize, drlen: usize) -> Result<Vec<u8>, FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_ilde {
+        if !self.is_idle {
             cmd.jtag_any2idle();
         }
         cmd.jtag_idle2ir()
@@ -339,7 +339,7 @@ impl Jtag {
     ) -> Result<Vec<u8>, FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_ilde {
+        if !self.is_idle {
             cmd.jtag_any2idle();
         }
         cmd.jtag_idle2ir()

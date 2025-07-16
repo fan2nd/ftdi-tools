@@ -33,13 +33,16 @@ mod swd;
 
 pub use ftdaye::Interface;
 use ftdaye::{ChipType, FtdiContext, FtdiError};
-pub use gpio::{InputPin, OutputPin};
-pub use i2c::I2c;
-pub use jtag::{Jtag, JtagDetectTdi, JtagDetectTdo};
+pub use gpio::{FtdiInputPin, FtdiOutputPin};
+pub use i2c::FtdiI2c;
+pub use jtag::{
+    hw_jtag::FtdiJtag,
+    jtag_detect::{JtagDetectTdi, JtagDetectTdo},
+};
 pub use list::list_all_device;
 use mpsse_cmd::MpsseCmdBuilder;
-pub use spi::{Spi, SpiMode};
-pub use swd::{Swd, SwdAddr};
+pub use spi::{FtdiSpi, SpiMode};
+pub use swd::{FtdiSwd, SwdAddr};
 
 /// Pin number
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -55,7 +58,7 @@ impl Pin {
         }
     }
 }
-/// Tracks the operational mode of a GPIO pin
+/// State tracker for each pin on the FTDI chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PinUse {
     Output,

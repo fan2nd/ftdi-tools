@@ -47,7 +47,7 @@ impl ChipType {
 #[repr(C)]
 #[expect(unused)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum BitMode {
+pub(crate) enum BitMode {
     Reset = 0,
     Bitbang = 1,
     Mpsse = 2,

@@ -312,11 +312,6 @@ impl JtagDetectTdi {
             }
         }
 
-        // Exit Shift-DR state
-        self.clock_tck(1, 0)?; // Exit1-DR
-        self.clock_tck(1, 0)?; // Update-DR
-        self.clock_tck(0, 0)?; // Return to Run-Test/Idle
-
         Ok(idcodes)
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ftdi_tools::{FtdiMpsse, Swd, SwdAddr, list_all_device};
+use ftdi_tools::{FtdiMpsse, FtdiSwd, SwdAddr, list_all_device};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -9,7 +9,7 @@ fn main() -> anyhow::Result<()> {
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
     mpsse.set_frequency(1_000_000)?;
     let mtx = Arc::new(Mutex::new(mpsse));
-    let swd = Swd::new(mtx)?;
+    let swd = FtdiSwd::new(mtx)?;
     swd.enable()?;
     let idcode = swd.read(SwdAddr::Dp(0))?;
     println!("idcode:{idcode:#x?}");
