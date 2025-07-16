@@ -19,9 +19,12 @@ impl From<SwdAddr> for u8 {
         }
     }
 }
+/// Serial Wire Debug (SWD) interface controller
+/// Implements ARM Debug Interface v5 communication protocol
 pub struct Swd {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
+    /// Optional direction control pin for SWDIO signal (half-duplex mode)
     direction_pin: Option<Pin>,
 }
 impl Drop for Swd {
@@ -109,6 +112,17 @@ impl Swd {
         request
     }
     /// Perform SWD read operation
+    /// Performs SWD read operation from specified debug port address
+    ///
+    /// # Arguments
+    /// * `addr` - SWD address specification (AP or DP with register offset)
+    ///
+    /// # Returns
+    /// Result containing 32-bit read value or FtdiError if communication fails
+    ///
+    /// # Protocol Details
+    /// Implements SWD read transaction including request, ACK check, data reception,
+    /// and parity verification as defined in ARM Debug Interface Architecture Specification
     pub fn read(&self, addr: SwdAddr) -> Result<u32, FtdiError> {
         let request = Self::build_request(true, addr);
         let mut response = [0u8];

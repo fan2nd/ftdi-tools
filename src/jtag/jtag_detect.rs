@@ -2,6 +2,7 @@ use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError, mpsse_cmd::MpsseCmdBuilde
 use std::sync::{Arc, Mutex};
 
 pub struct JtagDetectTdo {
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     tck: usize,
     tms: usize,
@@ -80,12 +81,26 @@ impl JtagDetectTdo {
         Ok(response)
     }
 
-    // 使用指定TDI值扫描JTAG链上的设备IDCODE
+    /// Scans JTAG chain to identify connected devices through TDO pins
+    ///
+    /// # Returns
+    /// Result containing 8-element vector (one per TDO pin) of detected IDCODE vectors
+    /// Each inner vector contains Option<u32> where:
+    /// - Some(u32): Valid 32-bit IDCODE detected
+    /// - None: Bypass detected
+    /// - Empty: No devices detected on that pin
+    ///
+    /// # Protocol Flow
+    /// 1. Resets JTAG state machine to Shift-DR
+    /// 2. Shifts 64 bits (2*ID_LEN) through scan chain
+    /// 3. Analyzes TDO responses from all non-TCK/TMS pins
+    /// 4. Detects IDCODEs by accumulating 32-bit sequences
+    /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
     pub fn scan(&self) -> Result<Vec<Vec<Option<u32>>>, FtdiError> {
         const ID_LEN: usize = 32;
         self.reset2dr()?;
 
-        // 移入0并读取TDO，持续直到检测到连续32个0
+        // Shift 0s and read TDO until 32 consecutive 0s detected
         let mut idcodes = vec![Vec::new(); 8];
         let mut current_id = [0u32; 8];
         let mut bit_count = [0; 8];
@@ -100,22 +115,23 @@ impl JtagDetectTdo {
             let tdos: Vec<_> = read.iter().map(|&x| (x >> i) & 1 == 1).collect();
 
             for tdo_val in tdos {
-                // bypass
+                // Bypass detection - no device present
                 if bit_count[i] == 0 && !tdo_val {
                     idcodes[i].push(None);
                     consecutive_bypass[i] += 1;
                 } else {
+                    // Accumulate IDCODE bits (MSB first)
                     current_id[i] = (current_id[i] >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
                     bit_count[i] += 1;
                     consecutive_bypass[i] = 0;
                 }
-                // 连续32个Bypass退出
+                // Exit on 32 consecutive bypass bits
                 if consecutive_bypass[i] == ID_LEN {
                     break;
                 }
-                // 每32位保存一个IDCODE
+                // Store completed 32-bit IDCODE
                 if bit_count[i] == ID_LEN {
-                    // IDCODE无效退出
+                    // Terminate on invalid IDCODE (all 1s)
                     if current_id[i] == u32::MAX {
                         break;
                     }
@@ -129,6 +145,7 @@ impl JtagDetectTdo {
 }
 
 pub struct JtagDetectTdi {
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     tck: usize,
     tdi: usize,
@@ -233,41 +250,59 @@ impl JtagDetectTdi {
         Ok(())
     }
 
-    // 使用指定TDI值扫描JTAG链上的设备IDCODE
+    /// Scans JTAG chain to identify connected devices with specified TDI value
+    ///
+    /// # Arguments
+    /// * `tdi_val` - TDI pin value to drive during scanning (0 or 1)
+    ///
+    /// # Returns
+    /// Result containing vector of detected IDCODEs where:
+    /// - Some(u32): Valid 32-bit IDCODE detected
+    /// - None: Bypass detected
+    /// - Empty: No devices detected
+    ///
+    /// # Protocol Flow
+    /// 1. Resets JTAG state machine to Run-Test/Idle
+    /// 2. Enters Shift-DR state through Select-DR-Scan → Capture-DR → Shift-DR
+    /// 3. Continuously shifts specified TDI value while monitoring TDO
+    /// 4. Detects IDCODEs by accumulating 32-bit sequences
+    /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
+    /// 6. Exits to Run-Test/Idle through Exit1-DR → Update-DR
     pub fn scan_with(&self, tdi_val: u8) -> Result<Vec<Option<u32>>, FtdiError> {
         const ID_LEN: usize = 32;
         self.goto_idle()?;
 
-        // 进入Shift-DR状态
+        // Enter Shift-DR state
         self.clock_tck(1, 1)?; // Select-DR-Scan
         self.clock_tck(0, 1)?; // Capture-DR
         self.clock_tck(0, 1)?; // Shift-DR
 
-        // 移入0并读取TDO，持续直到检测到连续32个0
+        // Shift TDI value and read TDO until 32 consecutive 0s detected
         let mut idcodes = Vec::new();
         let mut current_id = 0u32;
         let mut bit_count = 0;
         let mut consecutive_bypass = 0;
 
         'outer: loop {
-            let tdos = self.clock_tcks(0, tdi_val, ID_LEN)?; // 移入tdi_val
+            let tdos = self.clock_tcks(0, tdi_val, ID_LEN)?; // Shift in tdi_val
             for tdo_val in tdos {
-                // bypass
+                // Bypass detection - no device present
                 if bit_count == 0 && !tdo_val {
                     idcodes.push(None);
                     consecutive_bypass += 1;
                 } else {
+                    // Accumulate IDCODE bits (MSB first)
                     current_id = (current_id >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
                     bit_count += 1;
                     consecutive_bypass = 0;
                 }
-                // 连续32个Bypass退出
+                // Exit on 32 consecutive bypass bits
                 if consecutive_bypass == ID_LEN {
                     break 'outer;
                 }
-                // 每32位保存一个IDCODE
+                // Store completed 32-bit IDCODE
                 if bit_count == ID_LEN {
-                    // IDCODE无效退出
+                    // Terminate on invalid IDCODE (all 1s)
                     if current_id == u32::MAX {
                         break 'outer;
                     }
@@ -277,10 +312,10 @@ impl JtagDetectTdi {
             }
         }
 
-        // 退出Shift-DR状态
+        // Exit Shift-DR state
         self.clock_tck(1, 0)?; // Exit1-DR
         self.clock_tck(1, 0)?; // Update-DR
-        self.clock_tck(0, 0)?; // 返回Run-Test/Idle
+        self.clock_tck(0, 0)?; // Return to Run-Test/Idle
 
         Ok(idcodes)
     }

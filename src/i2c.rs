@@ -8,15 +8,16 @@ use std::sync::{Arc, Mutex};
 // because i2c is msb
 const SLAVE_ACK_MASK: u8 = 1 << 0;
 
-/// FTDI I2C interface.
+/// Inter-Integrated Circuit (I2C) master controller using FTDI MPSSE
+///
+/// Implements I2C bus communication with support for start/stop conditions and clock stretching
 pub struct I2c {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
-    /// Length of the start, repeated start, and stop conditions.
-    ///
-    /// The units for these are dimensionless number of MPSSE commands.
-    /// More MPSSE commands roughly correlates to more time.
+    /// Length of start, repeated start, and stop conditions in MPSSE commands
+    /// More commands increase the duration of these conditions
     start_stop_cmds: usize,
+    /// Optional direction pin for SDA line direction control (if used)
     direction_pin: Option<Pin>,
 }
 
@@ -208,7 +209,16 @@ impl eh1::i2c::ErrorType for I2c {
     type Error = eh1::i2c::ErrorKind;
 }
 
+/// I2C trait implementation for FTDI MPSSE
 impl eh1::i2c::I2c for I2c {
+    /// Executes a sequence of I2C operations (read/write) on the specified device
+    ///
+    /// # Arguments
+    /// * `address` - 7-bit I2C device address
+    /// * `operations` - Slice of read/write operations to perform
+    ///
+    /// # Returns
+    /// Result indicating success or failure of the transaction
     fn transaction(
         &mut self,
         address: SevenBitAddress,

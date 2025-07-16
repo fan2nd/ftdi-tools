@@ -117,11 +117,16 @@ impl DerefMut for JtagCmdBuilder {
         &mut self.0
     }
 }
+/// JTAG (Joint Test Action Group) interface controller
+/// Implements JTAG state machine management and data transfer operations
 pub struct Jtag {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
-    is_ilde: bool,
+    /// Tracks if the JTAG state machine is in idle state
+    is_idle: bool,
+    /// Whether adaptive clocking (RTCK) is enabled
     adaptive_clocking: bool,
+    /// Optional custom pin assignments for JTAG signals
     direction: Option<[OutputPin; 4]>,
 }
 impl Drop for Jtag {
@@ -135,20 +140,33 @@ impl Drop for Jtag {
     }
 }
 impl Jtag {
+    /// Creates a new JTAG interface instance
+    ///
+    /// # Arguments
+    /// * `mtx` - Thread-safe handle to FTDI MPSSE controller
+    ///
+    /// # Returns
+    /// Result containing Jtag instance or FtdiError
+    ///
+    /// # Pin Allocation
+    /// Default pin assignments on lower GPIO bank:
+    /// - TCK: Lower(0) - Test Clock
+    /// - TDI: Lower(1) - Test Data In
+    /// - TDO: Lower(2) - Test Data Out
+    /// - TMS: Lower(3) - Test Mode Select
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Jtag);
-            lock.alloc_pin(Pin::Lower(1), PinUse::Jtag);
-            lock.alloc_pin(Pin::Lower(2), PinUse::Jtag);
-            lock.alloc_pin(Pin::Lower(3), PinUse::Jtag);
-            // set TCK(AD0) TDI(AD1) TMS(AD3) as output pins
+            lock.alloc_pin(Pin::Lower(0), PinUse::Jtag); // TCK
+            lock.alloc_pin(Pin::Lower(1), PinUse::Jtag); // TDI
+            lock.alloc_pin(Pin::Lower(2), PinUse::Jtag); // TDO (input)
+            lock.alloc_pin(Pin::Lower(3), PinUse::Jtag); // TMS
+            // Set TCK, TDI, TMS as output pins (0x0b = 00001011)
             lock.lower.direction |= 0x0b;
-            // TCK(AD0) must be init with value 0.
-            // TDI(AD1) can only can output on second edge.
-            // TDO(AD2) can only can sample on first edge.
-            // according to AN108-2.2.
-            // https://ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
+            // TCK must initialize to low (AN108-2.2)
+            // TDI outputs on second clock edge
+            // TDO samples on first clock edge
+            // Reference: https://ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction)
                 .enable_3phase_data_clocking(false);
@@ -156,11 +174,18 @@ impl Jtag {
         }
         Ok(Self {
             mtx,
-            is_ilde: false,
+            is_idle: false,
             adaptive_clocking: false,
             direction: Default::default(),
         })
     }
+    /// Enables/disables adaptive clocking (RTCK)
+    ///
+    /// # Arguments
+    /// * `state` - true to enable adaptive clocking, false to disable
+    ///
+    /// # Notes
+    /// Requires JTAG target to support RTCK feedback
     pub fn adaptive_clock(&mut self, state: bool) -> Result<(), FtdiError> {
         if self.adaptive_clocking == state {
             return Ok(());
@@ -179,6 +204,16 @@ impl Jtag {
         self.adaptive_clocking = state;
         Ok(())
     }
+    /// Configures custom JTAG pin assignments
+    ///
+    /// # Arguments
+    /// * `tck` - Test Clock pin
+    /// * `tdi` - Test Data Input pin
+    /// * `tdo` - Test Data Output pin
+    /// * `tms` - Test Mode Select pin
+    ///
+    /// # Important
+    /// Must be called after initialization, original default pins will be overridden
     pub fn with_direction(
         &mut self,
         tck: Pin,

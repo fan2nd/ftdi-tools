@@ -20,11 +20,15 @@ pub enum SpiMode {
 /// FTDI SPI bus.
 ///
 /// In embedded-hal version 1 this represents an exclusive SPI bus.
+/// Serial Peripheral Interface (SPI) master controller using FTDI MPSSE
+///
+/// Implements full-duplex synchronous serial communication with configurable mode
 pub struct Spi {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
-    /// SPI polarity
+    /// Initial value of SCK line (clock polarity) - determines idle state
     tck_init_value: bool,
+    /// Whether data is transferred least significant bit (LSB) first
     is_lsb: bool,
 }
 

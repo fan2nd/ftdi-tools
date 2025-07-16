@@ -55,7 +55,7 @@ impl Pin {
         }
     }
 }
-/// State tracker for each pin on the FTDI chip.
+/// Tracks the operational mode of a GPIO pin
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PinUse {
     Output,
@@ -65,25 +65,42 @@ enum PinUse {
     Jtag,
     Swd,
 }
+
+/// Manages a bank of 8 GPIO pins
+/// Tracks direction, current value, and allocated protocol usage
 #[derive(Debug, Default)]
 struct GpioByte {
-    /// GPIO direction. 0 for input and 1 for output
+    /// Direction mask (0 = input, 1 = output) for each pin in the bank
     direction: u8,
-    /// GPIO value.
+    /// Current logic level (0 = low, 1 = high) for each output pin
     value: u8,
-    /// Pin allocation.
+    /// Protocol allocation status for each pin (prevents conflicting usage)
     pins: [Option<PinUse>; 8],
 }
 
+/// Main FTDI MPSSE (Multi-Protocol Synchronous Serial Engine) controller
+/// Manages FTDI device communication and protocol-specific pin configurations
 pub struct FtdiMpsse {
-    /// FTDI device.
+    /// FTDI device context handle
     ft: FtdiContext,
+    /// Type of FTDI chip (e.g., FT232H, FT2232H)
     chip_type: ChipType,
+    /// Lower 8 GPIO pins state tracker
     lower: GpioByte,
+    /// Upper GPIO pins state tracker (if supported by chip)
     upper: GpioByte,
 }
 
 impl FtdiMpsse {
+    /// Opens and initializes an FTDI device in MPSSE mode
+    ///
+    /// # Arguments
+    /// * `usb_device` - USB device information from enumeration
+    /// * `interface` - FTDI interface to use (A, B, etc.)
+    /// * `mask` - Initial GPIO pin direction mask
+    ///
+    /// # Returns
+    /// Result containing FtdiMpsse instance or FtdiError
     pub fn open(
         usb_device: &nusb::DeviceInfo,
         interface: Interface,
@@ -114,7 +131,7 @@ impl FtdiMpsse {
             // (0x1000, _) => ChipType::FT230X,
             (version, _) => {
                 return Err(FtdiError::Other(format!(
-                    "Unkonwn ChipType version:0x{version:x}"
+                    "Unknown ChipType version:0x{version:x}"
                 )));
             }
         };
@@ -143,6 +160,17 @@ impl FtdiMpsse {
         })
     }
 
+    /// Sets the MPSSE clock frequency
+    ///
+    /// # Arguments
+    /// * `frequency_hz` - Target frequency in Hertz
+    ///
+    /// # Returns
+    /// Result containing the actual set frequency or FtdiError
+    ///
+    /// # Notes
+    /// Actual frequency may differ from target due to hardware limitations
+    /// Supports frequencies from 91Hz to chip-specific maximum (typically 30MHz)
     pub fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
         const MIN_FREQUENCY: usize = 6_000_000 / (u16::MAX as usize + 1);
         let mut max_frequency = self.chip_type.max_frequency();

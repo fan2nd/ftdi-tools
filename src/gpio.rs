@@ -3,11 +3,14 @@ use crate::mpsse_cmd::MpsseCmdBuilder;
 use crate::{FtdiMpsse, Pin, PinUse};
 use std::sync::{Arc, Mutex};
 
-/// FTDI output pin.
+/// FTDI GPIO output pin abstraction
+///
+/// Represents a single GPIO pin configured as output. Manages pin state and
+/// ensures proper cleanup through Drop implementation.
 pub struct OutputPin {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
-    /// GPIO pin index.
+    /// GPIO pin identifier
     pin: Pin,
 }
 
@@ -38,7 +41,7 @@ impl OutputPin {
         Ok(OutputPin { mtx, pin })
     }
 
-    pub fn set(&self, state: bool) -> Result<(), FtdiError> {
+    pub(crate) fn set(&self, state: bool) -> Result<(), FtdiError> {
         let mut lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         match self.pin {
@@ -85,9 +88,12 @@ impl eh1::digital::OutputPin for OutputPin {
     }
 }
 
-/// FTDI input pin.
+/// FTDI GPIO input pin abstraction
+///
+/// Represents a single GPIO pin configured as input. Provides methods to read
+/// pin state and ensures proper cleanup through Drop implementation.
 pub struct InputPin {
-    /// Parent FTDI device.
+    /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// GPIO pin index.
     pin: Pin,
