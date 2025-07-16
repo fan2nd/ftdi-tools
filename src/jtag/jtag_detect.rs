@@ -1,26 +1,28 @@
 use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError, mpsse_cmd::MpsseCmdBuilder};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub struct JtagDetectTdo {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     tck: usize,
     tms: usize,
-    has_direction: bool,
 }
 impl Drop for JtagDetectTdo {
     fn drop(&mut self) {
         let mut lock = self.mtx.lock().unwrap();
         for i in 0..8 {
             lock.free_pin(Pin::Lower(i));
-            if self.has_direction {
-                lock.free_pin(Pin::Upper(i));
-            }
         }
     }
 }
 impl JtagDetectTdo {
-    /// Will use all lower pins
+    /// Will use all lower pins as tdi(except tck & tms)
+    ///
+    /// If you want to use the level translation chip, please use [`crate::FtdiOutputPin`] to control.
+    ///
+    /// Parameters:
+    ///
+    /// tck & tms are all lower pins index
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, tck: usize, tms: usize) -> Result<Self, FtdiError> {
         let mut lock = mtx.lock().unwrap();
         for i in 0..8 {
@@ -35,50 +37,7 @@ impl JtagDetectTdo {
             mtx: mtx.clone(),
             tck,
             tms,
-            has_direction: false,
         })
-    }
-
-    // 将JTAG状态机复位到Run-Test/Idle状态, 然后切换带shift-dr
-    fn reset2dr(&self) -> Result<(), FtdiError> {
-        let direction = 1 << self.tck | 1 << self.tms;
-        let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_gpio_lower(1 << self.tck, direction);
-        for _ in 0..5 {
-            cmd
-                // TMS1
-                .set_gpio_lower(1 << self.tms, direction) // TCK to low
-                .set_gpio_lower(1 << self.tck | 1 << self.tms, direction); // TCK to high
-        }
-        cmd
-            // TMS0
-            .set_gpio_lower(0, direction) // TCK to low
-            .set_gpio_lower(1 << self.tck, direction) // TCK to high
-            // TMS1
-            .set_gpio_lower(1 << self.tms, direction) // TCK to low
-            .set_gpio_lower(1 << self.tck | 1 << self.tms, direction) // TCK to high
-            // TMS0
-            .set_gpio_lower(0, direction) // TCK to low
-            .set_gpio_lower(1 << self.tck, direction) // TCK to high
-            .set_gpio_lower(0, direction) // TCK to low
-            .set_gpio_lower(1 << self.tck, direction); // TCK to high
-        let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut [])?;
-        Ok(())
-    }
-
-    fn shift_dr(&self, len: usize) -> Result<Vec<u8>, FtdiError> {
-        let direction = 1 << self.tck | 1 << self.tms;
-        let mut response = vec![0; len];
-        let mut cmd = MpsseCmdBuilder::new();
-        for _ in 0..len {
-            cmd.set_gpio_lower(0, direction) // TCK to low
-                .set_gpio_lower(1 << self.tck, direction) // TCK to high
-                .gpio_lower();
-        }
-        let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut response)?;
-        Ok(response)
     }
 
     /// Scans JTAG chain to identify connected devices through TDO pins
@@ -96,51 +55,47 @@ impl JtagDetectTdo {
     /// 3. Analyzes TDO responses from all non-TCK/TMS pins
     /// 4. Detects IDCODEs by accumulating 32-bit sequences
     /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
-    pub fn scan(&self) -> Result<Vec<Vec<Option<u32>>>, FtdiError> {
+    pub fn scan(&self) -> Result<Vec<Pin>, FtdiError> {
         const ID_LEN: usize = 32;
-        self.reset2dr()?;
-
-        // Shift 0s and read TDO until 32 consecutive 0s detected
-        let mut idcodes = vec![Vec::new(); 8];
-        let mut current_id = [0u32; 8];
-        let mut bit_count = [0; 8];
-        let mut consecutive_bypass = [0; 8];
-
-        let read = self.shift_dr(ID_LEN * 2)?;
+        let mut tdo_pins = Vec::new();
+        let lock = self.mtx.lock().unwrap();
+        reset2dr(&lock, self.tck, self.tms)?;
+        let read = shift_dr(&lock, self.tck, self.tms, None, ID_LEN * 2)?;
         // println!("read_buf{read:?}");
         for i in 0..8 {
             if i == self.tck || i == self.tms {
                 continue;
             }
+            let mut current_id = 0;
+            let mut bit_count = 0;
+            let mut consecutive_bypass = 0;
             let tdos: Vec<_> = read.iter().map(|&x| (x >> i) & 1 == 1).collect();
 
             for tdo_val in tdos {
                 // Bypass detection - no device present
-                if bit_count[i] == 0 && !tdo_val {
-                    idcodes[i].push(None);
-                    consecutive_bypass[i] += 1;
+                if bit_count == 0 && !tdo_val {
+                    consecutive_bypass += 1;
                 } else {
-                    // Accumulate IDCODE bits (MSB first)
-                    current_id[i] = (current_id[i] >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
-                    bit_count[i] += 1;
-                    consecutive_bypass[i] = 0;
+                    // Accumulate IDCODE bits (LSB first)
+                    current_id = (current_id >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
+                    bit_count += 1;
+                    consecutive_bypass = 0;
                 }
                 // Exit on 32 consecutive bypass bits
-                if consecutive_bypass[i] == ID_LEN {
+                if consecutive_bypass == ID_LEN {
                     break;
                 }
                 // Store completed 32-bit IDCODE
-                if bit_count[i] == ID_LEN {
+                if bit_count == ID_LEN {
                     // Terminate on invalid IDCODE (all 1s)
-                    if current_id[i] == u32::MAX {
-                        break;
+                    if current_id != u32::MAX {
+                        tdo_pins.push(Pin::Lower(i));
                     }
-                    idcodes[i].push(Some(current_id[i]));
-                    bit_count[i] = 0;
+                    break;
                 }
             }
         }
-        Ok(idcodes)
+        Ok(tdo_pins)
     }
 }
 
@@ -162,7 +117,10 @@ impl Drop for JtagDetectTdi {
     }
 }
 impl JtagDetectTdi {
-    /// Only can use lower pins
+    /// If you want to use the level translation chip, please use [`crate::FtdiOutputPin`] to control.
+    /// Parameters:
+    ///
+    /// tck & tdi & tdo & tms are all lower pins index
     pub fn new(
         mtx: Arc<Mutex<FtdiMpsse>>,
         tck: usize,
@@ -175,8 +133,6 @@ impl JtagDetectTdi {
         lock.alloc_pin(Pin::Lower(tdi), PinUse::Output);
         lock.alloc_pin(Pin::Lower(tdo), PinUse::Input);
         lock.alloc_pin(Pin::Lower(tms), PinUse::Output);
-        // all pins default set to low
-        lock.lower.direction |= 1 << tck | 1 << tdi | 1 << tms; // all pins default input, set tck/tdi/tms to output
         Ok(Self {
             mtx: mtx.clone(),
             tck,
@@ -184,70 +140,6 @@ impl JtagDetectTdi {
             tdo,
             tms,
         })
-    }
-
-    // 辅助函数：产生时钟边沿并读取TDO
-    fn clock_tck(&self, tms_val: u8, tdi_val: u8) -> Result<bool, FtdiError> {
-        assert!(tms_val == 0 || tms_val == 1);
-        assert!(tdi_val == 0 || tdi_val == 1);
-        let lock = self.mtx.lock().unwrap();
-        let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_gpio_lower(
-            lock.lower.value | tdi_val << self.tdi | tms_val << self.tms,
-            lock.lower.direction,
-        )
-        .set_gpio_lower(
-            lock.lower.value | 1 << self.tck | tdi_val << self.tdi | tms_val << self.tms,
-            lock.lower.direction,
-        )
-        .gpio_lower()
-        .set_gpio_lower(
-            lock.lower.value | tdi_val << self.tdi | tms_val << self.tms,
-            lock.lower.direction,
-        );
-        let mut response = [0u8];
-        lock.write_read(cmd.as_slice(), &mut response)?;
-        Ok(response[0] & (1 << self.tdo) != 0)
-    }
-
-    // 辅助函数：产生时钟边沿并读取TDO
-    fn clock_tcks(&self, tms_val: u8, tdi_val: u8, count: usize) -> Result<Vec<bool>, FtdiError> {
-        assert!(tms_val == 0 || tms_val == 1);
-        assert!(tdi_val == 0 || tdi_val == 1);
-        let lock = self.mtx.lock().unwrap();
-        let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_gpio_lower(
-            lock.lower.value | tdi_val << self.tdi | tms_val << self.tms,
-            lock.lower.direction,
-        );
-        for _ in 0..count {
-            cmd.set_gpio_lower(
-                lock.lower.value | 1 << self.tck | tdi_val << self.tdi | tms_val << self.tms,
-                lock.lower.direction,
-            ) // set tck to high
-            .gpio_lower()
-            .set_gpio_lower(
-                lock.lower.value | tdi_val << self.tdi | tms_val << self.tms,
-                lock.lower.direction,
-            ); // set tck to low
-        }
-        let mut response = vec![0; count];
-        lock.write_read(cmd.as_slice(), &mut response)?;
-        Ok(response
-            .into_iter()
-            .map(|x| x & 1 << self.tdo != 0)
-            .collect())
-    }
-
-    // 将JTAG状态机复位到Run-Test/Idle状态
-    fn goto_idle(&self) -> Result<(), FtdiError> {
-        // 发送5个TMS=1复位状态机 (Test-Logic-Reset)
-        self.clock_tcks(1, 1, 5)?;
-        // 进入Run-Test/Idle: TMS=0 -> Run-Test/Idle
-        self.clock_tck(0, 1)?;
-        // 保持Run-Test/Idle (TMS=0)
-        self.clock_tck(0, 1)?;
-        Ok(())
     }
 
     /// Scans JTAG chain to identify connected devices with specified TDI value
@@ -268,50 +160,93 @@ impl JtagDetectTdi {
     /// 4. Detects IDCODEs by accumulating 32-bit sequences
     /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
     /// 6. Exits to Run-Test/Idle through Exit1-DR → Update-DR
-    pub fn scan_with(&self, tdi_val: u8) -> Result<Vec<Option<u32>>, FtdiError> {
+    pub fn scan_with(&self, tdi_val: bool) -> Result<Vec<Option<u32>>, FtdiError> {
         const ID_LEN: usize = 32;
-        self.goto_idle()?;
-
-        // Enter Shift-DR state
-        self.clock_tck(1, 1)?; // Select-DR-Scan
-        self.clock_tck(0, 1)?; // Capture-DR
-        self.clock_tck(0, 1)?; // Shift-DR
-
         // Shift TDI value and read TDO until 32 consecutive 0s detected
         let mut idcodes = Vec::new();
         let mut current_id = 0u32;
         let mut bit_count = 0;
         let mut consecutive_bypass = 0;
 
-        'outer: loop {
-            let tdos = self.clock_tcks(0, tdi_val, ID_LEN)?; // Shift in tdi_val
-            for tdo_val in tdos {
-                // Bypass detection - no device present
-                if bit_count == 0 && !tdo_val {
-                    idcodes.push(None);
-                    consecutive_bypass += 1;
-                } else {
-                    // Accumulate IDCODE bits (MSB first)
-                    current_id = (current_id >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
-                    bit_count += 1;
-                    consecutive_bypass = 0;
-                }
-                // Exit on 32 consecutive bypass bits
-                if consecutive_bypass == ID_LEN {
-                    break 'outer;
-                }
-                // Store completed 32-bit IDCODE
-                if bit_count == ID_LEN {
-                    // Terminate on invalid IDCODE (all 1s)
-                    if current_id == u32::MAX {
-                        break 'outer;
-                    }
+        let lock = self.mtx.lock().unwrap();
+        reset2dr(&lock, self.tck, self.tms)?;
+        let tdi = if tdi_val { Some(self.tdi) } else { None };
+        let tdos: Vec<_> = shift_dr(&lock, self.tck, self.tms, tdi, ID_LEN * 2)?
+            .into_iter()
+            .map(|x| x & (1 << self.tdo) != 0)
+            .collect();
+
+        for tdo_val in tdos {
+            // Bypass detection - no device present
+            if bit_count == 0 && !tdo_val {
+                idcodes.push(None);
+                consecutive_bypass += 1;
+            } else {
+                // Accumulate IDCODE bits (MSB first)
+                current_id = (current_id >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
+                bit_count += 1;
+                consecutive_bypass = 0;
+            }
+            // Exit on 32 consecutive bypass bits
+            if consecutive_bypass == ID_LEN {
+                break;
+            }
+            // Exit on 32 consecutive one bits or this idcode is valid
+            if bit_count == ID_LEN {
+                if current_id != u32::MAX {
                     idcodes.push(Some(current_id));
-                    bit_count = 0;
                 }
+                break;
             }
         }
-
         Ok(idcodes)
     }
+}
+// 将JTAG状态机复位到Run-Test/Idle状态, 然后切换到shift-dr
+fn reset2dr(lock: &MutexGuard<FtdiMpsse>, tck: usize, tms: usize) -> Result<(), FtdiError> {
+    let tck_mask = 1 << tck;
+    let tms_mask = 1 << tms;
+    let direction = tck_mask | tms_mask;
+    let mut cmd = MpsseCmdBuilder::new();
+    cmd.set_gpio_lower(tck_mask, direction);
+    for _ in 0..5 {
+        cmd
+            // TMS1
+            .set_gpio_lower(tms_mask, direction) // TCK to low
+            .set_gpio_lower(tck_mask | tms_mask, direction); // TCK to high
+    }
+    cmd
+        // TMS0
+        .set_gpio_lower(0, direction) // TCK to low
+        .set_gpio_lower(tck_mask, direction) // TCK to high
+        // TMS1
+        .set_gpio_lower(tms_mask, direction) // TCK to low
+        .set_gpio_lower(tck_mask | tms_mask, direction) // TCK to high
+        // TMS0
+        .set_gpio_lower(0, direction) // TCK to low
+        .set_gpio_lower(tck_mask, direction) // TCK to high
+        .set_gpio_lower(0, direction) // TCK to low
+        .set_gpio_lower(tck_mask, direction); // TCK to high
+    lock.write_read(cmd.as_slice(), &mut [])?;
+    Ok(())
+}
+
+fn shift_dr(
+    lock: &MutexGuard<FtdiMpsse>,
+    tck: usize,
+    tms: usize,
+    tdi: Option<usize>,
+    len: usize,
+) -> Result<Vec<u8>, FtdiError> {
+    let tdi_mask = if let Some(x) = tdi { 1 << x } else { 0 };
+    let direction = 1 << tck | 1 << tms | tdi_mask;
+    let mut response = vec![0; len];
+    let mut cmd = MpsseCmdBuilder::new();
+    for _ in 0..len {
+        cmd.set_gpio_lower(tdi_mask, direction) // TCK0,TMS0,
+            .set_gpio_lower((1 << tck) | tdi_mask, direction) // TCK1,TMS0,
+            .gpio_lower();
+    }
+    lock.write_read(cmd.as_slice(), &mut response)?;
+    Ok(response)
 }

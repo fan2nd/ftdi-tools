@@ -3,44 +3,42 @@
 
 /// MPSSE opcodes.
 ///
-/// Exported for use by [`mpsse`] macro. May also be used for manual command array construction.
-///
 /// Data clocking MPSSE commands are broken out into separate enums for API ergonomics:
-/// * [`MpsseShiftCmd`]
+/// [`MpsseShiftCmd`]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 enum MpsseCmd {
-    /// Used by [`set_gpio_lower`][`MpsseCmdBuilder::set_gpio_lower`].
+    /// Used by [`MpsseCmdBuilder::set_gpio_lower`].
     SetDataBitsLowbyte = 0x80,
-    /// Used by [`gpio_lower`][`MpsseCmdBuilder::gpio_lower`].
+    /// Used by [`MpsseCmdBuilder::gpio_lower`].
     GetDataBitsLowbyte = 0x81,
-    /// Used by [`set_gpio_upper`][`MpsseCmdBuilder::set_gpio_upper`].
+    /// Used by [`MpsseCmdBuilder::set_gpio_upper`].
     SetDataBitsHighbyte = 0x82,
-    /// Used by [`gpio_upper`][`MpsseCmdBuilder::gpio_upper`].
+    /// Used by [`MpsseCmdBuilder::gpio_upper`].
     GetDataBitsHighbyte = 0x83,
-    /// Used by [`enable_loopback`][`MpsseCmdBuilder::enable_loopback`].
+    /// Used by [`MpsseCmdBuilder::enable_loopback`].
     EnableLoopback = 0x84,
-    /// Used by [`enable_loopback`][`MpsseCmdBuilder::enable_loopback`].
+    /// Used by [`MpsseCmdBuilder::enable_loopback`].
     DisableLoopback = 0x85,
-    /// Used by [`set_clock`][`MpsseCmdBuilder::set_clock`].
+    /// Used by [`MpsseCmdBuilder::set_clock`].
     SetClockFrequency = 0x86,
-    /// Used by [`send_immediate`][`MpsseCmdBuilder::send_immediate`].
+    /// Used by [`MpsseCmdBuilder::send_immediate`].
     SendImmediate = 0x87,
-    /// Used by [`_wait_on_io_high`][`MpsseCmdBuilder::_wait_on_io_high`].
+    /// Used by [`MpsseCmdBuilder::_wait_on_io_high`].
     _WaitOnIOHigh = 0x88,
-    /// Used by [`_wait_on_io_low`][`MpsseCmdBuilder::_wait_on_io_low`].
+    /// Used by [`MpsseCmdBuilder::_wait_on_io_low`].
     _WaitOnIOLow = 0x89,
-    /// Used by [`set_clock`][`MpsseCmdBuilder::set_clock`].
+    /// Used by [`MpsseCmdBuilder::set_clock`].
     DisableClockDivide = 0x8A,
-    /// Used by [`set_clock`][`MpsseCmdBuilder::set_clock`].
+    /// Used by [`MpsseCmdBuilder::set_clock`].
     EnableClockDivide = 0x8B,
-    /// Used by [`enable_3phase_data_clocking`][`MpsseCmdBuilder::enable_3phase_data_clocking`].
+    /// Used by .
     Enable3PhaseClocking = 0x8C,
-    /// Used by [`enable_3phase_data_clocking`][`MpsseCmdBuilder::enable_3phase_data_clocking`].
+    /// Used by [`MpsseCmdBuilder::enable_3phase_data_clocking`].
     Disable3PhaseClocking = 0x8D,
-    /// Used by [`enable_adaptive_clocking`][`MpsseCmdBuilder::enable_adaptive_clocking`].
+    /// Used by [`MpsseCmdBuilder::enable_adaptive_clocking`].
     EnableAdaptiveClocking = 0x96,
-    /// Used by [`enable_adaptive_clocking`][`MpsseCmdBuilder::enable_adaptive_clocking`].
+    /// Used by [`MpsseCmdBuilder::enable_adaptive_clocking`].
     DisableAdaptiveClocking = 0x97,
     // This command is only available to FT232
     _EnableDriveOnlyZero = 0x9E,
@@ -80,7 +78,7 @@ impl MpsseShiftCmd {
         is_lsb: bool,
         tdi_write: bool,
         tdo_read: bool,
-    ) -> Self {
+    ) -> u8 {
         assert!(
             tdi_write | tdo_read,
             "tdi_write and tdo_read can not be false tonight"
@@ -92,204 +90,16 @@ impl MpsseShiftCmd {
             .with_is_lsb(is_lsb)
             .with_is_tdi_write(tdi_write)
             .with_is_tdo_read(tdo_read)
+            .into()
     }
-    fn tms_shift(tck_init_value: bool, tdo_neg_read: bool, tdo_read: bool) -> Self {
+    fn tms_shift(tck_init_value: bool, tdo_neg_read: bool, tdo_read: bool) -> u8 {
         MpsseShiftCmd::new()
             .with_is_tdi_neg_write(!tck_init_value)
             .with_is_tdo_neg_read(tdo_neg_read && tdo_read)
             .with_is_tdo_read(tdo_read)
             .with_is_tms_write(true)
-    }
-}
-#[test]
-fn mpsse_shift_cmd_write_box_test() {
-    // AN108 3.3
-    assert_eq!(
-        0x10 as u8,
-        MpsseShiftCmd::shift(true, false, false, true, false).into()
-    );
-    assert_eq!(
-        0x11 as u8,
-        MpsseShiftCmd::shift(false, false, false, true, false).into()
-    );
-    assert_eq!(
-        0x12 as u8,
-        MpsseShiftCmd::shift(true, true, false, true, false).into()
-    );
-    assert_eq!(
-        0x13 as u8,
-        MpsseShiftCmd::shift(false, true, false, true, false).into()
-    );
-
-    assert_eq!(
-        0x20 as u8,
-        MpsseShiftCmd::shift(false, false, false, false, true).into()
-    );
-    assert_eq!(
-        0x24 as u8,
-        MpsseShiftCmd::shift(true, false, false, false, true).into()
-    );
-    assert_eq!(
-        0x22 as u8,
-        MpsseShiftCmd::shift(false, true, false, false, true).into()
-    );
-    assert_eq!(
-        0x26 as u8,
-        MpsseShiftCmd::shift(true, true, false, false, true).into()
-    );
-
-    assert_eq!(
-        0x31 as u8,
-        MpsseShiftCmd::shift(false, false, false, true, true).into()
-    );
-    assert_eq!(
-        0x34 as u8,
-        MpsseShiftCmd::shift(true, false, false, true, true).into()
-    );
-    assert_eq!(
-        0x33 as u8,
-        MpsseShiftCmd::shift(false, true, false, true, true).into()
-    );
-    assert_eq!(
-        0x36 as u8,
-        MpsseShiftCmd::shift(true, true, false, true, true).into()
-    );
-
-    // AN108-3.4
-    assert_eq!(
-        0x18 as u8,
-        MpsseShiftCmd::shift(true, false, true, true, false).into()
-    );
-    assert_eq!(
-        0x19 as u8,
-        MpsseShiftCmd::shift(false, false, true, true, false).into()
-    );
-    assert_eq!(
-        0x1a as u8,
-        MpsseShiftCmd::shift(true, true, true, true, false).into()
-    );
-    assert_eq!(
-        0x1b as u8,
-        MpsseShiftCmd::shift(false, true, true, true, false).into()
-    );
-
-    assert_eq!(
-        0x28 as u8,
-        MpsseShiftCmd::shift(false, false, true, false, true).into()
-    );
-    assert_eq!(
-        0x2c as u8,
-        MpsseShiftCmd::shift(true, false, true, false, true).into()
-    );
-    assert_eq!(
-        0x2a as u8,
-        MpsseShiftCmd::shift(false, true, true, false, true).into()
-    );
-    assert_eq!(
-        0x2e as u8,
-        MpsseShiftCmd::shift(true, true, true, false, true).into()
-    );
-
-    assert_eq!(
-        0x39 as u8,
-        MpsseShiftCmd::shift(false, false, true, true, true).into()
-    );
-    assert_eq!(
-        0x3c as u8,
-        MpsseShiftCmd::shift(true, false, true, true, true).into()
-    );
-    assert_eq!(
-        0x3b as u8,
-        MpsseShiftCmd::shift(false, true, true, true, true).into()
-    );
-    assert_eq!(
-        0x3e as u8,
-        MpsseShiftCmd::shift(true, true, true, true, true).into()
-    );
-
-    // AN108-3.5
-    // Note: The table in 3.5 is not correct.
-    assert_eq!(
-        0x4a as u8,
-        MpsseShiftCmd::tms_shift(true, false, false).into()
-    );
-    assert_eq!(
-        0x4a as u8,
-        MpsseShiftCmd::tms_shift(true, true, false).into()
-    );
-    assert_eq!(
-        0x4b as u8,
-        MpsseShiftCmd::tms_shift(false, false, false).into()
-    );
-    assert_eq!(
-        0x4b as u8,
-        MpsseShiftCmd::tms_shift(false, true, false).into()
-    );
-    assert_eq!(
-        0x6a as u8,
-        MpsseShiftCmd::tms_shift(true, false, true).into()
-    );
-    assert_eq!(
-        0x6b as u8,
-        MpsseShiftCmd::tms_shift(false, false, true).into()
-    );
-    assert_eq!(
-        0x6e as u8,
-        MpsseShiftCmd::tms_shift(true, true, true).into()
-    );
-    assert_eq!(
-        0x6f as u8,
-        MpsseShiftCmd::tms_shift(false, true, true).into()
-    );
-}
-#[test]
-fn mpsse_shift_cmd_black_box_test() {
-    use std::panic;
-    let mut cmd_set = Vec::new();
-    let permutations: Vec<_> = (0..32)
-        .map(|i| {
-            [
-                i & (1 << 0) != 0, // 最低位 -> 索引0
-                i & (1 << 1) != 0,
-                i & (1 << 2) != 0,
-                i & (1 << 3) != 0,
-                i & (1 << 4) != 0, // 最高位 -> 索引4
-            ]
-        })
-        .collect();
-    for permutation in permutations.iter() {
-        let result: Result<u8, _> = panic::catch_unwind(|| {
-            MpsseShiftCmd::shift(
-                permutation[0],
-                permutation[1],
-                permutation[2],
-                permutation[3],
-                permutation[4],
-            )
             .into()
-        });
-        if let Ok(x) = result {
-            cmd_set.push(x);
-        }
     }
-    for permutation in permutations[0..8].iter() {
-        let result: Result<u8, _> = panic::catch_unwind(|| {
-            MpsseShiftCmd::tms_shift(permutation[0], permutation[1], permutation[2]).into()
-        });
-        if let Ok(x) = result {
-            cmd_set.push(x);
-        }
-    }
-    cmd_set.sort();
-    cmd_set.dedup();
-    assert_eq!(
-        cmd_set,
-        [
-            0x10, 0x11, 0x12, 0x13, 0x18, 0x19, 0x1a, 0x1b, 0x20, 0x22, 0x24, 0x26, 0x28, 0x2a,
-            0x2c, 0x2e, 0x31, 0x33, 0x34, 0x36, 0x39, 0x3b, 0x3c, 0x3e, 0x4a, 0x4b, 0x6a, 0x6b,
-            0x6e, 0x6f
-        ]
-    )
 }
 
 /// FTDI Multi-Protocol Synchronous Serial Engine (MPSSE) command builder.
@@ -509,7 +319,7 @@ impl MpsseCmdBuilder {
         assert!(len <= 65536, "data length should be in 1..=65536");
         len -= 1;
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, true, false).into(),
+            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, true, false),
             (len & 0xFF) as u8,
             ((len >> 8) & 0xFF) as u8,
         ]);
@@ -540,7 +350,7 @@ impl MpsseCmdBuilder {
         self.read_len += len;
         len -= 1;
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, false, true).into(),
+            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, false, true),
             (len & 0xFF) as u8,
             ((len >> 8) & 0xFF) as u8,
         ]);
@@ -559,7 +369,7 @@ impl MpsseCmdBuilder {
         self.read_len += len;
         len -= 1;
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, true, true).into(),
+            MpsseShiftCmd::shift(tck_init_value, false, is_lsb, true, true),
             (len & 0xFF) as u8,
             ((len >> 8) & 0xFF) as u8,
         ]);
@@ -587,7 +397,7 @@ impl MpsseCmdBuilder {
         }
         assert!(len <= 8, "data length should be in 1..=8");
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, false).into(),
+            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, false),
             (len - 1) as u8,
             data,
         ]);
@@ -608,7 +418,7 @@ impl MpsseCmdBuilder {
         assert!(len <= 8, "data length should be in 1..=8");
         self.read_len += 1;
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, false, true).into(),
+            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, false, true),
             (len - 1) as u8,
         ]);
         self
@@ -634,7 +444,7 @@ impl MpsseCmdBuilder {
         assert!(len <= 8, "data length should be in 1..=8");
         self.read_len += 1;
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, true).into(),
+            MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, true),
             (len - 1) as u8,
             data,
         ]);
@@ -664,7 +474,7 @@ impl MpsseCmdBuilder {
         assert!(len <= 7, "data length should be in 1..=7");
         let data = if tdi { data | 0x80 } else { data };
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false).into(),
+            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false),
             (len - 1) as u8,
             data,
         ]);
@@ -695,10 +505,135 @@ impl MpsseCmdBuilder {
         self.read_len += 1;
         let data = if tdi { data | 0x80 } else { data };
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false).into(),
+            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false),
             (len - 1) as u8,
             data,
         ]);
         self
+    }
+}
+#[cfg(test)]
+mod test {
+    use super::MpsseShiftCmd;
+    #[test]
+    fn mpsse_shift_cmd_write_box_test() {
+        // AN108 3.3
+        assert_eq!(
+            0x10u8,
+            MpsseShiftCmd::shift(true, false, false, true, false)
+        );
+        assert_eq!(
+            0x11u8,
+            MpsseShiftCmd::shift(false, false, false, true, false)
+        );
+        assert_eq!(0x12u8, MpsseShiftCmd::shift(true, true, false, true, false));
+        assert_eq!(
+            0x13u8,
+            MpsseShiftCmd::shift(false, true, false, true, false)
+        );
+
+        assert_eq!(
+            0x20u8,
+            MpsseShiftCmd::shift(false, false, false, false, true)
+        );
+        assert_eq!(
+            0x24u8,
+            MpsseShiftCmd::shift(true, false, false, false, true)
+        );
+        assert_eq!(
+            0x22u8,
+            MpsseShiftCmd::shift(false, true, false, false, true)
+        );
+        assert_eq!(0x26u8, MpsseShiftCmd::shift(true, true, false, false, true));
+
+        assert_eq!(
+            0x31u8,
+            MpsseShiftCmd::shift(false, false, false, true, true)
+        );
+        assert_eq!(0x34u8, MpsseShiftCmd::shift(true, false, false, true, true));
+        assert_eq!(0x33u8, MpsseShiftCmd::shift(false, true, false, true, true));
+        assert_eq!(0x36u8, MpsseShiftCmd::shift(true, true, false, true, true));
+
+        // AN108-3.4
+        assert_eq!(0x18u8, MpsseShiftCmd::shift(true, false, true, true, false));
+        assert_eq!(
+            0x19u8,
+            MpsseShiftCmd::shift(false, false, true, true, false)
+        );
+        assert_eq!(0x1au8, MpsseShiftCmd::shift(true, true, true, true, false));
+        assert_eq!(0x1bu8, MpsseShiftCmd::shift(false, true, true, true, false));
+
+        assert_eq!(
+            0x28u8,
+            MpsseShiftCmd::shift(false, false, true, false, true)
+        );
+        assert_eq!(0x2cu8, MpsseShiftCmd::shift(true, false, true, false, true));
+        assert_eq!(0x2au8, MpsseShiftCmd::shift(false, true, true, false, true));
+        assert_eq!(0x2eu8, MpsseShiftCmd::shift(true, true, true, false, true));
+
+        assert_eq!(0x39u8, MpsseShiftCmd::shift(false, false, true, true, true));
+        assert_eq!(0x3cu8, MpsseShiftCmd::shift(true, false, true, true, true));
+        assert_eq!(0x3bu8, MpsseShiftCmd::shift(false, true, true, true, true));
+        assert_eq!(0x3eu8, MpsseShiftCmd::shift(true, true, true, true, true));
+
+        // AN108-3.5
+        // Note: The table in 3.5 is not correct.
+        assert_eq!(0x4au8, MpsseShiftCmd::tms_shift(true, false, false));
+        assert_eq!(0x4au8, MpsseShiftCmd::tms_shift(true, true, false));
+        assert_eq!(0x4bu8, MpsseShiftCmd::tms_shift(false, false, false));
+        assert_eq!(0x4bu8, MpsseShiftCmd::tms_shift(false, true, false));
+        assert_eq!(0x6au8, MpsseShiftCmd::tms_shift(true, false, true));
+        assert_eq!(0x6bu8, MpsseShiftCmd::tms_shift(false, false, true));
+        assert_eq!(0x6eu8, MpsseShiftCmd::tms_shift(true, true, true));
+        assert_eq!(0x6fu8, MpsseShiftCmd::tms_shift(false, true, true));
+    }
+    #[test]
+    fn mpsse_shift_cmd_black_box_test() {
+        use std::panic;
+        let mut cmd_set = Vec::new();
+        let permutations: Vec<_> = (0..32)
+            .map(|i| {
+                [
+                    i & (1 << 0) != 0, // 最低位 -> 索引0
+                    i & (1 << 1) != 0,
+                    i & (1 << 2) != 0,
+                    i & (1 << 3) != 0,
+                    i & (1 << 4) != 0, // 最高位 -> 索引4
+                ]
+            })
+            .collect();
+        for permutation in permutations.iter() {
+            let result: Result<u8, _> = panic::catch_unwind(|| {
+                MpsseShiftCmd::shift(
+                    permutation[0],
+                    permutation[1],
+                    permutation[2],
+                    permutation[3],
+                    permutation[4],
+                )
+                .into()
+            });
+            if let Ok(x) = result {
+                cmd_set.push(x);
+            }
+        }
+        for permutation in permutations[0..8].iter() {
+            let result: Result<u8, _> = panic::catch_unwind(|| {
+                MpsseShiftCmd::tms_shift(permutation[0], permutation[1], permutation[2])
+            });
+            if let Ok(x) = result {
+                cmd_set.push(x);
+            }
+        }
+        cmd_set.sort();
+        cmd_set.dedup();
+        assert_eq!(
+            cmd_set,
+            [
+                0x10, 0x11, 0x12, 0x13, 0x18, 0x19, 0x1a, 0x1b, 0x20, 0x22, 0x24, 0x26, 0x28, 0x2a,
+                0x2c, 0x2e, 0x31, 0x33, 0x34, 0x36, 0x39, 0x3b, 0x3c, 0x3e, 0x4a, 0x4b, 0x6a, 0x6b,
+                0x6e, 0x6f
+            ]
+        )
     }
 }

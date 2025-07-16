@@ -3,7 +3,7 @@ use std::{
     time::Instant,
 };
 
-use ftdi_tools::{FtdiMpsse, JtagDetectTdi, list_all_device};
+use ftdi_tools::{FtdiMpsse, JtagDetectTdi, JtagDetectTdo, Pin, list_all_device};
 use itertools::Itertools;
 
 fn main() -> anyhow::Result<()> {
@@ -14,18 +14,33 @@ fn main() -> anyhow::Result<()> {
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
     let mtx = Arc::new(Mutex::new(mpsse));
     let pins = [0, 1, 2, 3, 4, 5, 6, 7];
-    for couple in pins.into_iter().permutations(4) {
-        let softjtag = JtagDetectTdi::new(mtx.clone(), couple[0], couple[1], couple[2], couple[3])?;
-        let ids_scan1 = softjtag.scan_with(1)?;
-        if ids_scan1.iter().any(Option::is_some) {
-            print!(
-                "testing: [tck:{:?},tdi:{:?},tdo:{:?},tms:{:?}]",
-                couple[0], couple[1], couple[2], couple[3],
-            );
-            let ids_scan0 = softjtag.scan_with(0)?;
-            if ids_scan0.len() <= ids_scan1.len() {
-                println!("!!!!!! tdi is not correct");
-            } else {
+    let mut notdi = Vec::new();
+    // find tdo
+    for couple in pins.into_iter().permutations(2) {
+        let tck = couple[0];
+        let tms = couple[1];
+        let jtag = JtagDetectTdo::new(mtx.clone(), tck, tms)?;
+        let tdo_pins = jtag.scan()?;
+        for tdo in tdo_pins.into_iter() {
+            if let Pin::Lower(tdo_idx) = tdo {
+                if !pins.contains(&tdo_idx) {
+                    continue;
+                }
+                notdi.push((tck, tms, tdo_idx));
+            }
+        }
+    }
+    // find tdi
+    for (tck, tms, tdo) in notdi {
+        for &tdi in pins.iter() {
+            if tdi == tck || tdi == tms || tdi == tdo {
+                continue;
+            }
+            let jtag = JtagDetectTdi::new(mtx.clone(), tck, tdi, tdo, tms)?;
+            let ids_scan1 = jtag.scan_with(true)?;
+            let ids_scan0 = jtag.scan_with(false)?;
+            if ids_scan0.len() > ids_scan1.len() {
+                println!("!!!!!! Pins:tck[{tck}],tdi[{tdi}],tdo[{tdo}],tms[{tms}]");
                 println!("!!!!!! Found Devices:{ids_scan1:x?}");
             }
         }
