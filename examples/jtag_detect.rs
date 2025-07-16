@@ -20,6 +20,8 @@ fn main() -> anyhow::Result<()> {
         let tck = couple[0];
         let tms = couple[1];
         let jtag = JtagDetectTdo::new(mtx.clone(), tck, tms)?;
+        // you can add code here to control level translation chip
+        // tck and tms output, other input
         let tdo_pins = jtag.scan()?;
         for tdo in tdo_pins.into_iter() {
             if let Pin::Lower(tdo_idx) = tdo {
@@ -37,6 +39,8 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
             let jtag = JtagDetectTdi::new(mtx.clone(), tck, tdi, tdo, tms)?;
+            // you can add code here to control level translation chip
+            // tck and tms and tdi output, tdo input
             let ids_scan1 = jtag.scan_with(true)?;
             let ids_scan0 = jtag.scan_with(false)?;
             if ids_scan0.len() > ids_scan1.len() {
