@@ -5,6 +5,8 @@ use crate::{FtdiMpsse, Pin, PinUse};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 
+const SLAVE_ACK_MASK: u8 = 1 << 0;
+const SLAVE_NOT_ACK: u8 = SLAVE_ACK_MASK;
 /// Inter-Integrated Circuit (I2C) master controller using FTDI MPSSE
 ///
 /// Implements I2C bus communication with support for start/stop conditions and clock stretching
@@ -16,6 +18,7 @@ pub struct FtdiI2c {
     start_stop_cmds: usize,
     /// Optional direction pin for SDA line direction control (if used)
     direction_pin: Option<Pin>,
+    enable_fast: bool,
 }
 
 impl Drop for FtdiI2c {
@@ -53,6 +56,7 @@ impl FtdiI2c {
             mtx,
             start_stop_cmds: 3,
             direction_pin: None,
+            enable_fast: false,
         };
         log::info!("IIC default 100Khz");
         this.set_frequency(100_000)?;
@@ -74,6 +78,9 @@ impl FtdiI2c {
             }
         }
         self.direction_pin = Some(pin)
+    }
+    pub fn enbale_fast(&mut self, enable: bool) {
+        self.enable_fast = enable;
     }
 
     /// Set the length of start and stop conditions.
@@ -112,8 +119,93 @@ impl FtdiI2c {
         address: u8,
         operations: &mut [Operation<'_>],
     ) -> Result<(), ErrorKind> {
-        // because i2c is msb
-        const SLAVE_ACK_MASK: u8 = 1 << 0;
+        // lock at the start to prevent GPIO from being modified while we build
+        // the MPSSE command
+        let lock = self.mtx.lock().unwrap();
+
+        // start
+        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+        cmd.start(self.start_stop_cmds);
+        lock.write_read(cmd.as_slice(), &mut [])?;
+
+        let mut prev_op_was_a_read: bool = false;
+        for (op_idx, operation) in operations.iter_mut().enumerate() {
+            match operation {
+                Operation::Read(buffer) => {
+                    if op_idx == 0 || !prev_op_was_a_read {
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        if op_idx != 0 {
+                            cmd.start(self.start_stop_cmds); // repeated start
+                        }
+                        cmd.i2c_addr(address, true); // (Address+Read)+Ack
+                        let mut response = [0];
+                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK {
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            cmd.end(self.start_stop_cmds);
+                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        }
+                    }
+
+                    let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                    for idx in 0..buffer.len() {
+                        if idx == buffer.len() - 1 {
+                            cmd.i2c_read(false); // NMAK: Master Not Ack
+                        } else {
+                            cmd.i2c_read(true); // MAK: Master Ack
+                        }
+                    }
+                    lock.write_read(cmd.as_slice(), buffer)?;
+
+                    prev_op_was_a_read = true;
+                }
+                Operation::Write(bytes) => {
+                    if op_idx == 0 || prev_op_was_a_read {
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        if op_idx != 0 {
+                            cmd.start(self.start_stop_cmds); // repeated start
+                        }
+                        cmd.i2c_addr(address, false); // (Address+Write)+Ack
+                        let mut response = [0u8];
+                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK {
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            cmd.end(self.start_stop_cmds);
+                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        }
+                    }
+                    for idx in 0..bytes.len() {
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        cmd.i2c_write(bytes[idx]);
+                        let mut response = [0u8];
+                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK && idx != bytes.len() - 1
+                        {
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            cmd.end(self.start_stop_cmds);
+                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
+                        }
+                    }
+                    prev_op_was_a_read = false;
+                }
+            }
+        }
+
+        // stop
+        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+        cmd.end(self.start_stop_cmds);
+        lock.write_read(cmd.as_slice(), &mut [])?;
+
+        Ok(())
+    }
+    fn transaction_fast(
+        &mut self,
+        address: u8,
+        operations: &mut [Operation<'_>],
+    ) -> Result<(), ErrorKind> {
         // lock at the start to prevent GPIO from being modified while we build
         // the MPSSE command
         let lock = self.mtx.lock().unwrap();
@@ -128,72 +220,76 @@ impl FtdiI2c {
             match operation {
                 Operation::Read(buffer) => {
                     if idx == 0 || !prev_op_was_a_read {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         if idx != 0 {
-                            // repeated start
-                            cmd.start(self.start_stop_cmds);
+                            cmd.start(self.start_stop_cmds); // repeated start
                         }
-                        // addr + ack_read
                         cmd.i2c_addr(address, true);
-
-                        let mut response = [0];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) != 0x00 {
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
-                        }
                     }
-
-                    let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                     for idx in 0..buffer.len() {
                         if idx == buffer.len() - 1 {
-                            // NMAK: Master Not Ack
                             cmd.i2c_read(false);
                         } else {
-                            // MAK: Master Ack
                             cmd.i2c_read(true);
                         }
                     }
-                    lock.write_read(cmd.as_slice(), buffer)?;
-
                     prev_op_was_a_read = true;
                 }
                 Operation::Write(bytes) => {
                     if idx == 0 || prev_op_was_a_read {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         if idx != 0 {
-                            // repeated start
-                            cmd.start(self.start_stop_cmds);
+                            cmd.start(self.start_stop_cmds); // repeated start
                         }
-                        cmd
-                            // Address+Write+Ack
-                            .i2c_addr(address, false);
-
-                        let mut response = [0u8];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) != 0x00 {
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
-                        }
+                        cmd.i2c_addr(address, false);
                     }
-
                     for &byte in *bytes {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         cmd.i2c_write(byte);
-                        let mut response = [0u8];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) != 0x00 {
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
-                        }
                     }
                     prev_op_was_a_read = false;
                 }
             }
         }
-
-        // stop
-        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
         cmd.end(self.start_stop_cmds);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        let mut response = vec![0; cmd.read_len()];
+        lock.write_read(cmd.as_slice(), &mut response)?;
 
+        // parse response
+        let mut prev_op_was_a_read: bool = false;
+        let mut response_idx = 0;
+        for (op_idx, operation) in operations.iter_mut().enumerate() {
+            match operation {
+                Operation::Read(buffer) => {
+                    if op_idx == 0 || !prev_op_was_a_read {
+                        // addr + ack_read
+                        if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        }
+                        response_idx += 1;
+                    }
+                    for idx in 0..buffer.len() {
+                        buffer[idx] = response[response_idx];
+                        response_idx += 1;
+                    }
+                    prev_op_was_a_read = true;
+                }
+                Operation::Write(bytes) => {
+                    if op_idx == 0 || prev_op_was_a_read {
+                        if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
+                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        }
+                        response_idx += 1;
+                    }
+                    for idx in 0..bytes.len() {
+                        if idx != bytes.len() - 1 {
+                            if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
+                                return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
+                            }
+                        }
+                        response_idx += 1;
+                    }
+                    prev_op_was_a_read = false;
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -223,7 +319,11 @@ impl eh1::i2c::I2c for FtdiI2c {
         address: SevenBitAddress,
         operations: &mut [Operation<'_>],
     ) -> Result<(), Self::Error> {
-        self.transaction(address, operations)
+        if self.enable_fast {
+            self.transaction_fast(address, operations)
+        } else {
+            self.transaction(address, operations)
+        }
     }
 }
 
