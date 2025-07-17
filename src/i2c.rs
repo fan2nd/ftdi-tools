@@ -64,7 +64,7 @@ impl FtdiI2c {
         if let Some(pin) = self.direction_pin {
             lock.free_pin(pin);
         }
-        lock.alloc_pin(pin, PinUse::Swd);
+        lock.alloc_pin(pin, PinUse::I2c);
         match pin {
             Pin::Lower(idx) => {
                 lock.lower.direction |= 1 << idx;
@@ -307,9 +307,15 @@ mod cmd {
             for _ in 0..count {
                 self.i2c_out(true, false);
             }
+            for _ in 0..count {
+                self.i2c_out(false, false);
+            }
             self
         }
         pub(super) fn end(&mut self, count: usize) -> &mut Self {
+            for _ in 0..count {
+                self.i2c_out(false, false);
+            }
             for _ in 0..count {
                 self.i2c_out(true, false);
             }

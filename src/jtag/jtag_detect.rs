@@ -224,6 +224,7 @@ impl JtagDetectTdi {
                         break 'outer;
                     }
                     idcodes.push(Some(current_id));
+                    bit_count = 0;
                 }
             }
         }

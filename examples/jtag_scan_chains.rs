@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
     let mtx = Arc::new(Mutex::new(mpsse));
     let mut jtag = FtdiJtag::new(mtx)?;
     let ids = jtag.scan_with(true)?;
-    println!("Scan Result:{ids:x?}");
+    println!("Scan Result:{ids:#x?}");
     println!("Finish Scan Using {:?}", now.elapsed());
     Ok(())
 }

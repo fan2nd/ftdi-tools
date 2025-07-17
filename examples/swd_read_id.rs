@@ -12,6 +12,7 @@ fn main() -> anyhow::Result<()> {
     let swd = FtdiSwd::new(mtx)?;
     swd.enable()?;
     let idcode = swd.read(SwdAddr::Dp(0))?;
+    // g431cbu6: 0x2BA01477; according to rm0440-47.8.5
     println!("idcode:{idcode:#x?}");
     Ok(())
 }
