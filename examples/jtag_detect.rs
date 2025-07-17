@@ -43,7 +43,9 @@ fn main() -> anyhow::Result<()> {
             // tck and tms and tdi output, tdo input
             let ids_scan1 = jtag.scan_with(true)?;
             let ids_scan0 = jtag.scan_with(false)?;
-            if ids_scan0.len() > ids_scan1.len() {
+            // Scanning with 1 will give you 32 more bypasses than scanning with 0
+            if ids_scan0.len() - ids_scan1.len() == 32 {
+                // use 1 scan will
                 println!("!!!!!! Pins:tck[{tck}],tdi[{tdi}],tdo[{tdo}],tms[{tms}]");
                 println!("!!!!!! Found Devices:{ids_scan1:x?}");
             }
