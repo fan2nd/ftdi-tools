@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use anyhow::anyhow;
 use ftdi_tools::{FtdiI2c, FtdiMpsse, list_all_device};
 use lm75::Lm75;
 
@@ -13,6 +14,10 @@ fn main() -> anyhow::Result<()> {
     let addr_set = i2c.scan();
     println!("i2c detect:{:#?}", addr_set);
     let mut lm75 = Lm75::new(i2c, addr_set[0]);
-    println!("temperature:{}", lm75.read_temperature().unwrap());
+    let temp = lm75.read_temperature().map_err(|e| {
+        println!("{e:?}");
+        anyhow!("lm75 internal error")
+    })?;
+    println!("temperature:{}", temp);
     Ok(())
 }
