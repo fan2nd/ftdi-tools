@@ -2,6 +2,21 @@ use std::sync::{Arc, Mutex};
 
 use self::cmd::SwdCmdBuilder;
 use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError};
+
+#[derive(Debug, thiserror::Error)]
+pub enum FtdiSwdError {
+    #[error("Ftdi inner error")]
+    FtdiInner(#[from] FtdiError),
+    #[error("Swd ack wait.")]
+    AckWait,
+    #[error("Swd ack failed.")]
+    AckFailed,
+    #[error("Swd unknown ack LSB[{0:#3b}].")]
+    UnknownAck(u8),
+    #[error("Swd parity error.")]
+    ParityError,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SwdAddr {
     Dp(u8),
@@ -49,7 +64,7 @@ impl FtdiSwd {
     ///   Pin0 (SCK)        - Output
     ///   Pin1 (DIO_OUTPUT) - Output
     ///   Pin2 (DIO_INPUT)  - Input
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSwdError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::Swd);
@@ -124,7 +139,7 @@ impl FtdiSwd {
     /// # Protocol Details
     /// Implements SWD read transaction including request, ACK check, data reception,
     /// and parity verification as defined in ARM Debug Interface Architecture Specification
-    pub fn read(&self, addr: SwdAddr) -> Result<u32, FtdiError> {
+    pub fn read(&self, addr: SwdAddr) -> Result<u32, FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(true, addr);
         let mut response = [0u8];
@@ -140,9 +155,9 @@ impl FtdiSwd {
             cmd.trn();
             lock.write_read(cmd.as_slice(), &mut [])?;
             match ack {
-                Self::REPONSE_WAIT => return Err(FtdiError::Other("Swd ack wait".into())),
-                Self::REPONSE_FAILED => return Err(FtdiError::Other("Swd ack fail".into())),
-                x => return Err(FtdiError::Other(format!("Unknown ack {x:3b}"))),
+                Self::REPONSE_WAIT => return Err(FtdiSwdError::AckWait),
+                Self::REPONSE_FAILED => return Err(FtdiSwdError::AckFailed),
+                x => return Err(FtdiSwdError::UnknownAck(x)),
             }
         }
 
@@ -158,12 +173,12 @@ impl FtdiSwd {
         let calc_parity = value.count_ones() as u8 & 0x01;
 
         if parity != calc_parity {
-            return Err(FtdiError::Other("Swd data parity error".to_string()));
+            return Err(FtdiSwdError::ParityError);
         }
         Ok(value)
     }
 
-    pub fn write(&self, addr: SwdAddr, value: u32) -> Result<(), FtdiError> {
+    pub fn write(&self, addr: SwdAddr, value: u32) -> Result<(), FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(false, addr);
         let mut response = [0u8];
@@ -178,9 +193,9 @@ impl FtdiSwd {
         let ack = response[0] >> 5;
         if ack != Self::REPONSE_SUCCESS {
             match ack {
-                Self::REPONSE_WAIT => return Err(FtdiError::Other("Swd ack wait".into())),
-                Self::REPONSE_FAILED => return Err(FtdiError::Other("Swd ack fail".into())),
-                x => return Err(FtdiError::Other(format!("Unknown ack {x:3b}"))),
+                Self::REPONSE_WAIT => return Err(FtdiSwdError::AckWait),
+                Self::REPONSE_FAILED => return Err(FtdiSwdError::AckFailed),
+                x => return Err(FtdiSwdError::UnknownAck(x)),
             }
         }
         // Send data (33 bits)

@@ -9,6 +9,12 @@ const MOSI_MASK: u8 = 1 << 1;
 #[allow(unused)]
 const MISO_MASK: u8 = 1 << 2;
 
+impl Error for FtdiError {
+    fn kind(&self) -> ErrorKind {
+        ErrorKind::Other
+    }
+}
+
 // Spi only support mode0 and mode2
 // TDI(AD1) can only can output on second edge.
 // TDO(AD2) can only can sample on first edge.
@@ -87,12 +93,6 @@ impl FtdiSpi {
             SpiMode::LsbMode2 => (true, true),
         };
         Ok(())
-    }
-}
-
-impl Error for FtdiError {
-    fn kind(&self) -> ErrorKind {
-        ErrorKind::Other
     }
 }
 

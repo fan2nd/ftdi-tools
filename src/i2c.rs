@@ -5,8 +5,13 @@ use crate::{FtdiMpsse, Pin, PinUse};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 
-const SLAVE_ACK_MASK: u8 = 1 << 0;
-const SLAVE_NOT_ACK: u8 = SLAVE_ACK_MASK;
+#[derive(Debug, thiserror::Error)]
+pub enum FtdiI2cError {
+    #[error("Ftdi inner error.")]
+    FtdiInner(#[from] FtdiError),
+    #[error("Slave not ack.")]
+    NoAck(NoAcknowledgeSource),
+}
 /// Inter-Integrated Circuit (I2C) master controller using FTDI MPSSE
 ///
 /// Implements I2C bus communication with support for start/stop conditions and clock stretching
@@ -37,6 +42,8 @@ impl Drop for FtdiI2c {
 }
 
 impl FtdiI2c {
+    const SLAVE_ACK_MASK: u8 = 1 << 0;
+    const SLAVE_NOT_ACK: u8 = Self::SLAVE_ACK_MASK;
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiI2c, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
@@ -118,7 +125,7 @@ impl FtdiI2c {
         &mut self,
         address: u8,
         operations: &mut [Operation<'_>],
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<(), FtdiI2cError> {
         // lock at the start to prevent GPIO from being modified while we build
         // the MPSSE command
         let lock = self.mtx.lock().unwrap();
@@ -140,11 +147,11 @@ impl FtdiI2c {
                         cmd.i2c_addr(address, true); // (Address+Read)+Ack
                         let mut response = [0];
                         lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK {
+                        if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
                             lock.write_read(cmd.as_slice(), &mut [])?;
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
 
@@ -169,11 +176,11 @@ impl FtdiI2c {
                         cmd.i2c_addr(address, false); // (Address+Write)+Ack
                         let mut response = [0u8];
                         lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK {
+                        if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
                             lock.write_read(cmd.as_slice(), &mut [])?;
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
                     for idx in 0..bytes.len() {
@@ -181,12 +188,13 @@ impl FtdiI2c {
                         cmd.i2c_write(bytes[idx]);
                         let mut response = [0u8];
                         lock.write_read(cmd.as_slice(), &mut response)?;
-                        if (response[0] & SLAVE_ACK_MASK) == SLAVE_NOT_ACK && idx != bytes.len() - 1
+                        if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK
+                            && idx != bytes.len() - 1
                         {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
                             lock.write_read(cmd.as_slice(), &mut [])?;
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
                         }
                     }
                     prev_op_was_a_read = false;
@@ -205,7 +213,7 @@ impl FtdiI2c {
         &mut self,
         address: u8,
         operations: &mut [Operation<'_>],
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<(), FtdiI2cError> {
         // lock at the start to prevent GPIO from being modified while we build
         // the MPSSE command
         let lock = self.mtx.lock().unwrap();
@@ -260,8 +268,8 @@ impl FtdiI2c {
                 Operation::Read(buffer) => {
                     if op_idx == 0 || !prev_op_was_a_read {
                         // addr + ack_read
-                        if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        if response[response_idx] & Self::SLAVE_ACK_MASK == Self::SLAVE_NOT_ACK {
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                         response_idx += 1;
                     }
@@ -273,15 +281,16 @@ impl FtdiI2c {
                 }
                 Operation::Write(bytes) => {
                     if op_idx == 0 || prev_op_was_a_read {
-                        if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
-                            return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Address));
+                        if response[response_idx] & Self::SLAVE_ACK_MASK == Self::SLAVE_NOT_ACK {
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                         response_idx += 1;
                     }
                     for idx in 0..bytes.len() {
                         if idx != bytes.len() - 1 {
-                            if response[response_idx] & SLAVE_ACK_MASK == SLAVE_NOT_ACK {
-                                return Err(ErrorKind::NoAcknowledge(NoAcknowledgeSource::Data));
+                            if response[response_idx] & Self::SLAVE_ACK_MASK == Self::SLAVE_NOT_ACK
+                            {
+                                return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
                             }
                         }
                         response_idx += 1;
@@ -294,14 +303,17 @@ impl FtdiI2c {
     }
 }
 
-impl From<FtdiError> for ErrorKind {
-    fn from(_value: FtdiError) -> Self {
-        ErrorKind::Other
+impl eh1::i2c::Error for FtdiI2cError {
+    fn kind(&self) -> ErrorKind {
+        match self {
+            FtdiI2cError::NoAck(x) => ErrorKind::NoAcknowledge(*x),
+            _ => ErrorKind::Other,
+        }
     }
 }
 
 impl eh1::i2c::ErrorType for FtdiI2c {
-    type Error = eh1::i2c::ErrorKind;
+    type Error = FtdiI2cError;
 }
 
 /// I2C trait implementation for FTDI MPSSE
