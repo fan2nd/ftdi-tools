@@ -85,7 +85,7 @@ impl FtdiSwd {
     /// Send SWD activation sequence
     /// Sequence: >50 ones + 0x79E7 (MSB first) + >50 ones
     pub fn enable(&self) -> Result<(), FtdiError> {
-        let lock = self.mtx.lock().expect("Failed to acquire FTDI mutex");
+        let lock = self.mtx.lock().unwrap();
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_enable();
 
@@ -125,9 +125,9 @@ impl FtdiSwd {
     /// Implements SWD read transaction including request, ACK check, data reception,
     /// and parity verification as defined in ARM Debug Interface Architecture Specification
     pub fn read(&self, addr: SwdAddr) -> Result<u32, FtdiError> {
+        let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(true, addr);
         let mut response = [0u8];
-        let lock = self.mtx.lock().expect("Failed to acquire FTDI mutex");
         // Send request (8 bits)
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_send_request(request).trn().swd_read_response();
@@ -164,9 +164,9 @@ impl FtdiSwd {
     }
 
     pub fn write(&self, addr: SwdAddr, value: u32) -> Result<(), FtdiError> {
+        let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(false, addr);
         let mut response = [0u8];
-        let lock = self.mtx.lock().expect("Failed to acquire FTDI mutex");
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_send_request(request)
             .trn()
@@ -192,8 +192,8 @@ impl FtdiSwd {
 }
 
 mod cmd {
-    const SCK: u8 = 1 << 0; // SCK bitmask
-    const DIO: u8 = 1 << 1; // DIO bitmask
+    const SWCLK: u8 = 1 << 0; // SWCLK bitmask
+    const SWDIO: u8 = 1 << 1; // SWDIO bitmask
     const TCK_INIT_VALUE: bool = false;
     const IS_LSB: bool = true;
 
@@ -234,15 +234,18 @@ mod cmd {
             if let Some(pin) = self.direction_pin {
                 match pin {
                     Pin::Lower(idx) => {
-                        self.set_gpio_lower(lower_value | (1 << idx), lower_direction | SCK | DIO);
+                        self.set_gpio_lower(
+                            lower_value | (1 << idx),
+                            lower_direction | SWCLK | SWDIO,
+                        );
                     }
                     Pin::Upper(idx) => {
-                        self.set_gpio_lower(lower_value, lower_direction | SCK | DIO);
+                        self.set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
                         self.set_gpio_upper(upper_value | (1 << idx), upper_direction);
                     }
                 }
             } else {
-                self.set_gpio_lower(lower_value, lower_direction | SCK | DIO);
+                self.set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
             }
             self
         }
@@ -254,7 +257,7 @@ mod cmd {
             if let Some(Pin::Upper(_)) = self.direction_pin {
                 self.set_gpio_upper(upper_value, upper_direction);
             }
-            self.set_gpio_lower(lower_value, lower_direction | SCK);
+            self.set_gpio_lower(lower_value, lower_direction | SWCLK);
             self
         }
         pub(super) fn trn(&mut self) -> &mut Self {
