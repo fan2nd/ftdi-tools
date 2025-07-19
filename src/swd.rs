@@ -99,7 +99,7 @@ impl FtdiSwd {
     }
     /// Send SWD activation sequence
     /// Sequence: >50 ones + 0x79E7 (MSB first) + >50 ones
-    pub fn enable(&self) -> Result<(), FtdiError> {
+    pub fn enable(&self) -> Result<(), FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_enable();
@@ -134,7 +134,7 @@ impl FtdiSwd {
     /// * `addr` - SWD address specification (AP or DP with register offset)
     ///
     /// # Returns
-    /// Result containing 32-bit read value or FtdiError if communication fails
+    /// Result containing 32-bit read value or FtdiSwdError if communication fails
     ///
     /// # Protocol Details
     /// Implements SWD read transaction including request, ACK check, data reception,

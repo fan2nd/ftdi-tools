@@ -44,7 +44,7 @@ impl Drop for FtdiI2c {
 impl FtdiI2c {
     const SLAVE_ACK_MASK: u8 = 1 << 0;
     const SLAVE_NOT_ACK: u8 = Self::SLAVE_ACK_MASK;
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiI2c, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiI2c, FtdiI2cError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::I2c);
@@ -101,7 +101,7 @@ impl FtdiI2c {
         self.start_stop_cmds = start_stop_cmds
     }
 
-    pub fn set_frequency(&self, frequency_hz: usize) -> Result<(), FtdiError> {
+    pub fn set_frequency(&self, frequency_hz: usize) -> Result<(), FtdiI2cError> {
         let lock = self.mtx.lock().unwrap();
         lock.set_frequency(frequency_hz * 3 / 2)?;
         Ok(())
