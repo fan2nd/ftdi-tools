@@ -3,6 +3,12 @@ use crate::mpsse_cmd::MpsseCmdBuilder;
 use crate::{FtdiMpsse, FtdiOutputPin, Pin, PinUse};
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
+
+const TCK_MASK: u8 = 1 << 0;
+const TDI_MASK: u8 = 1 << 1;
+#[allow(unused)]
+const TDO_MASK: u8 = 1 << 2;
+const TMS_MASK: u8 = 1 << 3;
 // TCK(AD0) must be init with value 0.
 // TDI(AD1) can only can output on second edge.
 // TDO(AD2) can only can sample on first edge.
@@ -162,14 +168,13 @@ impl FtdiJtag {
             lock.alloc_pin(Pin::Lower(2), PinUse::Jtag); // TDO (input)
             lock.alloc_pin(Pin::Lower(3), PinUse::Jtag); // TMS
             // Set TCK, TDI, TMS as output pins (0x0b = 00001011)
-            lock.lower.direction |= 0x0b;
+            lock.lower.direction |= TCK_MASK | TDI_MASK | TMS_MASK;
             // TCK must initialize to low (AN108-2.2)
             // TDI outputs on second clock edge
             // TDO samples on first clock edge
             // Reference: https://ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
             let mut cmd = MpsseCmdBuilder::new();
-            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction)
-                .enable_3phase_data_clocking(false);
+            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             lock.write_read(cmd.as_slice(), &mut [])?;
         }
         Ok(Self {

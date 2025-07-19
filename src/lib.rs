@@ -41,7 +41,7 @@ pub use jtag::{
 };
 pub use list::list_all_device;
 use mpsse_cmd::MpsseCmdBuilder;
-pub use spi::{FtdiSpi, SpiMode};
+pub use spi::{FtdiSpi, FtdiSpiHalfduplex, SpiMode};
 pub use swd::{FtdiSwd, SwdAddr};
 
 /// Pin number
