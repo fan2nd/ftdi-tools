@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
     let mut lm75 = Lm75::new(i2c, addr_set[0]);
     let temp = lm75.read_temperature().map_err(|e| {
         if let lm75::Error::I2C(inner) = e {
-            inner.into()
+            anyhow!(inner)
         } else {
             anyhow!("lm75 internal error")
         }
