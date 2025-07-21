@@ -463,7 +463,6 @@ impl MpsseCmdBuilder {
     pub fn clock_tms_out(
         &mut self,
         tck_init_value: bool,
-        tdo_neg_read: bool,
         data: u8,
         tdi: bool,
         len: usize,
@@ -474,7 +473,7 @@ impl MpsseCmdBuilder {
         assert!(len <= 7, "data length should be in 1..=7");
         let data = if tdi { data | 0x80 } else { data };
         self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false),
+            MpsseShiftCmd::tms_shift(tck_init_value, Default::default(), false),
             (len - 1) as u8,
             data,
         ]);
