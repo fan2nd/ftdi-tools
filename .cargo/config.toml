@@ -1,2 +1,2 @@
 [env]
-RUST_LOG = "ftdi-tools=info"
+RUST_LOG = "ftdi_tools=info"
