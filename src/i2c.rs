@@ -142,7 +142,7 @@ impl FtdiI2c {
                     if op_idx == 0 || !prev_op_was_a_read {
                         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         if op_idx != 0 {
-                            cmd.start(self.start_stop_cmds); // repeated start
+                            cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, true); // (Address+Read)+Ack
                         let mut response = [0];
@@ -171,7 +171,7 @@ impl FtdiI2c {
                     if op_idx == 0 || prev_op_was_a_read {
                         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         if op_idx != 0 {
-                            cmd.start(self.start_stop_cmds); // repeated start
+                            cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, false); // (Address+Write)+Ack
                         let mut response = [0u8];
@@ -423,6 +423,12 @@ mod cmd {
                 self.i2c_out(false, false);
             }
             self
+        }
+        pub(super) fn restart(&mut self, count: usize) -> &mut Self {
+            for _ in 0..count {
+                self.i2c_out(false, true);
+            }
+            self.start(count)
         }
         pub(super) fn end(&mut self, count: usize) -> &mut Self {
             for _ in 0..count {
