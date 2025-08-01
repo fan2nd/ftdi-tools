@@ -53,7 +53,7 @@ impl Drop for FtdiSpi {
 }
 
 impl FtdiSpi {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiSpi, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::Spi);
@@ -69,7 +69,7 @@ impl FtdiSpi {
             lock.write_read(cmd.as_slice(), &mut [])?;
         }
         // default msb mode0
-        Ok(FtdiSpi {
+        Ok(Self {
             mtx,
             tck_init_value: false,
             is_lsb: false,
@@ -172,7 +172,7 @@ impl Drop for FtdiSpiHalfduplex {
 }
 
 impl FtdiSpiHalfduplex {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiSpiHalfduplex, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::Spi);
@@ -187,7 +187,7 @@ impl FtdiSpiHalfduplex {
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             lock.write_read(cmd.as_slice(), &mut [])?;
         }
-        Ok(FtdiSpiHalfduplex {
+        Ok(Self {
             mtx,
             tck_init_value: false,
             is_lsb: false,

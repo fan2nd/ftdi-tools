@@ -92,13 +92,17 @@ impl MpsseShiftCmd {
             .with_is_tdo_read(tdo_read)
             .into()
     }
-    fn tms_shift(tck_init_value: bool, tdo_neg_read: bool, tdo_read: bool) -> u8 {
+    fn _tms_shift(tck_init_value: bool, tdo_neg_read: bool, tdo_read: bool) -> u8 {
         MpsseShiftCmd::new()
             .with_is_tdi_neg_write(!tck_init_value)
             .with_is_tdo_neg_read(tdo_neg_read && tdo_read)
             .with_is_tdo_read(tdo_read)
             .with_is_tms_write(true)
             .into()
+    }
+    fn tms_shift(tdo_read: bool) -> u8 {
+        // tms only be used for jtag, so tck_init_value and tdo_neg_read only can be false.
+        Self::_tms_shift(false, false, tdo_read)
     }
 }
 
@@ -460,23 +464,14 @@ impl MpsseCmdBuilder {
     /// * `tdi` - Value to place on TDI while clocking.
     /// * `len` - Number of bits to clock out.
     ///   This will panic for values greater than 7.
-    pub fn clock_tms_out(
-        &mut self,
-        tck_init_value: bool,
-        data: u8,
-        tdi: bool,
-        len: usize,
-    ) -> &mut Self {
+    pub fn clock_tms_out(&mut self, data: u8, tdi: bool, len: usize) -> &mut Self {
         if len == 0 {
             return self;
         }
         assert!(len <= 7, "data length should be in 1..=7");
         let data = if tdi { data | 0x80 } else { data };
-        self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::tms_shift(tck_init_value, Default::default(), false),
-            (len - 1) as u8,
-            data,
-        ]);
+        self.cmd
+            .extend_from_slice(&[MpsseShiftCmd::tms_shift(false), (len - 1) as u8, data]);
         self
     }
 
@@ -489,25 +484,15 @@ impl MpsseCmdBuilder {
     /// * `tdi` - Value to place on TDI while clocking.
     /// * `len` - Number of bits to clock out.
     ///   This will panic for values greater than 7.
-    pub fn clock_tms(
-        &mut self,
-        tck_init_value: bool,
-        tdo_neg_read: bool,
-        data: u8,
-        tdi: bool,
-        len: usize,
-    ) -> &mut Self {
+    pub fn clock_tms(&mut self, data: u8, tdi: bool, len: usize) -> &mut Self {
         if len == 0 {
             return self;
         }
         assert!(len <= 7, "data length should be in 1..=7");
         self.read_len += 1;
         let data = if tdi { data | 0x80 } else { data };
-        self.cmd.extend_from_slice(&[
-            MpsseShiftCmd::tms_shift(tck_init_value, tdo_neg_read, false),
-            (len - 1) as u8,
-            data,
-        ]);
+        self.cmd
+            .extend_from_slice(&[MpsseShiftCmd::tms_shift(true), (len - 1) as u8, data]);
         self
     }
 }
@@ -577,14 +562,16 @@ mod test {
 
         // AN108-3.5
         // Note: The table in 3.5 is not correct.
-        assert_eq!(0x4au8, MpsseShiftCmd::tms_shift(true, false, false));
-        assert_eq!(0x4au8, MpsseShiftCmd::tms_shift(true, true, false));
-        assert_eq!(0x4bu8, MpsseShiftCmd::tms_shift(false, false, false));
-        assert_eq!(0x4bu8, MpsseShiftCmd::tms_shift(false, true, false));
-        assert_eq!(0x6au8, MpsseShiftCmd::tms_shift(true, false, true));
-        assert_eq!(0x6bu8, MpsseShiftCmd::tms_shift(false, false, true));
-        assert_eq!(0x6eu8, MpsseShiftCmd::tms_shift(true, true, true));
-        assert_eq!(0x6fu8, MpsseShiftCmd::tms_shift(false, true, true));
+        assert_eq!(0x4au8, MpsseShiftCmd::_tms_shift(true, false, false)); // Not used.
+        assert_eq!(0x4au8, MpsseShiftCmd::_tms_shift(true, true, false)); // Not used.
+        assert_eq!(0x4bu8, MpsseShiftCmd::_tms_shift(false, false, false));
+        assert_eq!(0x4bu8, MpsseShiftCmd::tms_shift(false));
+        assert_eq!(0x4bu8, MpsseShiftCmd::_tms_shift(false, true, false)); // Not used.
+        assert_eq!(0x6au8, MpsseShiftCmd::_tms_shift(true, false, true)); // Not used.
+        assert_eq!(0x6bu8, MpsseShiftCmd::_tms_shift(false, false, true));
+        assert_eq!(0x6bu8, MpsseShiftCmd::tms_shift(true));
+        assert_eq!(0x6eu8, MpsseShiftCmd::_tms_shift(true, true, true)); // Not used.
+        assert_eq!(0x6fu8, MpsseShiftCmd::_tms_shift(false, true, true)); // Not used.
     }
     #[test]
     fn mpsse_shift_cmd_black_box_test() {
@@ -618,7 +605,7 @@ mod test {
         }
         for permutation in permutations[0..8].iter() {
             let result: Result<u8, _> = panic::catch_unwind(|| {
-                MpsseShiftCmd::tms_shift(permutation[0], permutation[1], permutation[2])
+                MpsseShiftCmd::_tms_shift(permutation[0], permutation[1], permutation[2])
             });
             if let Ok(x) = result {
                 cmd_set.push(x);

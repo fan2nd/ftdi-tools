@@ -110,9 +110,9 @@ impl FtdiI2c {
     pub fn scan(&mut self) -> Vec<u8> {
         let mut addr_set = Vec::new();
         for addr in 0..128 {
-            let result1 = self.transaction(addr, &mut [Operation::Write(&mut[])]);
-            let result2 = self.transaction(addr, &mut [Operation::Read(&mut[])]);
-            if result1.is_ok() || result2.is_ok(){
+            let result1 = self.transaction(addr, &mut [Operation::Write(&[])]);
+            let result2 = self.transaction(addr, &mut [Operation::Read(&mut [])]);
+            if result1.is_ok() || result2.is_ok() {
                 addr_set.push(addr);
             }
         }
@@ -285,12 +285,12 @@ impl FtdiI2c {
                         response_idx += 1;
                     }
                     for idx in 0..bytes.len() {
-                        if idx != bytes.len() - 1 {
-                            if response[response_idx] & Self::SLAVE_ACK_MASK == Self::SLAVE_NOT_ACK
-                            {
-                                return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
-                            }
+                        if idx != bytes.len() - 1
+                            && response[response_idx] & Self::SLAVE_ACK_MASK == Self::SLAVE_NOT_ACK
+                        {
+                            return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
                         }
+
                         response_idx += 1;
                     }
                     prev_op_was_a_read = false;
