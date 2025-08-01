@@ -110,11 +110,9 @@ impl FtdiI2c {
     pub fn scan(&mut self) -> Vec<u8> {
         let mut addr_set = Vec::new();
         for addr in 0..128 {
-            let read_buf = &mut [0];
-            if self
-                .transaction(addr, &mut [Operation::Read(read_buf)])
-                .is_ok()
-            {
+            let result1 = self.transaction(addr, &mut [Operation::Write(&mut[])]);
+            let result2 = self.transaction(addr, &mut [Operation::Read(&mut[])]);
+            if result1.is_ok() || result2.is_ok(){
                 addr_set.push(addr);
             }
         }

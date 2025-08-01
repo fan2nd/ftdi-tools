@@ -12,7 +12,7 @@ fn main() -> anyhow::Result<()> {
     let mtx = Arc::new(Mutex::new(mpsse));
     let mut i2c = FtdiI2c::new(mtx)?;
     let addr_set = i2c.scan();
-    println!("i2c detect:{:#?}", addr_set);
+    println!("i2c detect:{:#x?}", addr_set);
     let mut lm75 = Lm75::new(i2c, addr_set[0]);
     let temp = lm75.read_temperature().map_err(|e| {
         if let lm75::Error::I2C(inner) = e {
