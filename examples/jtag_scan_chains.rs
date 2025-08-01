@@ -12,7 +12,6 @@ fn main() -> anyhow::Result<()> {
     let devices = list_all_device();
     assert!(!devices.is_empty(), "Not found Ftdi devices");
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
-    mpsse.set_frequency(1_000_000)?;
     let mtx = Arc::new(Mutex::new(mpsse));
     let mut jtag = FtdiJtag::new(mtx)?;
     let ids = jtag.scan_with(true)?;

@@ -212,6 +212,11 @@ impl FtdiSpiHalfduplex {
         };
         Ok(())
     }
+    /// set spi bps
+    pub fn set_bps(&mut self, bps: usize) -> Result<usize, FtdiError> {
+        let lock = self.mtx.lock().unwrap();
+        lock.set_frequency(bps)
+    }
 }
 
 impl ErrorType for FtdiSpiHalfduplex {

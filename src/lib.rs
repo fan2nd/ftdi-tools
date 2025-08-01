@@ -174,7 +174,7 @@ impl FtdiMpsse {
     /// # Notes
     /// Actual frequency may differ from target due to hardware limitations
     /// Supports frequencies from 91Hz to chip-specific maximum (typically 30MHz)
-    pub fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
+    fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
         const MIN_FREQUENCY: usize = 6_000_000 / (u16::MAX as usize + 1);
         let mut max_frequency = self.chip_type.max_frequency();
         if frequency_hz > max_frequency || frequency_hz < 91 {
