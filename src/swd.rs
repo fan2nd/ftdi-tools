@@ -154,11 +154,11 @@ impl FtdiSwd {
             let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
             cmd.trn();
             lock.write_read(cmd.as_slice(), &mut [])?;
-            match ack {
-                Self::REPONSE_WAIT => return Err(FtdiSwdError::AckWait),
-                Self::REPONSE_FAILED => return Err(FtdiSwdError::AckFailed),
-                x => return Err(FtdiSwdError::UnknownAck(x)),
-            }
+            return match ack {
+                Self::REPONSE_WAIT => Err(FtdiSwdError::AckWait),
+                Self::REPONSE_FAILED => Err(FtdiSwdError::AckFailed),
+                x => Err(FtdiSwdError::UnknownAck(x)),
+            };
         }
 
         // Read data (32 bits) + parity (1 bit) = 33 bits
@@ -192,11 +192,11 @@ impl FtdiSwd {
         // Read ACK (3 bits)
         let ack = response[0] >> 5;
         if ack != Self::REPONSE_SUCCESS {
-            match ack {
-                Self::REPONSE_WAIT => return Err(FtdiSwdError::AckWait),
-                Self::REPONSE_FAILED => return Err(FtdiSwdError::AckFailed),
-                x => return Err(FtdiSwdError::UnknownAck(x)),
-            }
+            return match ack {
+                Self::REPONSE_WAIT => Err(FtdiSwdError::AckWait),
+                Self::REPONSE_FAILED => Err(FtdiSwdError::AckFailed),
+                x => Err(FtdiSwdError::UnknownAck(x)),
+            };
         }
         // Send data (33 bits)
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
