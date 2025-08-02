@@ -173,46 +173,30 @@ impl FtdiMpsse {
     ///
     /// # Notes
     /// Actual frequency may differ from target due to hardware limitations
-    /// Supports frequencies from 91Hz to chip-specific maximum (typically 30MHz)
-    fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
-        const MIN_FREQUENCY: usize = 6_000_000 / (u16::MAX as usize + 1);
-        let mut max_frequency = self.chip_type.max_frequency();
-        if frequency_hz > max_frequency || frequency_hz < 91 {
-            log::warn!("speed has out of range[{MIN_FREQUENCY}-{max_frequency}Hz]",)
-        }
-        let mut cmd = MpsseCmdBuilder::new();
-        let mut divide = max_frequency / frequency_hz;
-        let mut divide_by_5 = if self.chip_type.has_devide_by5() {
-            Some(false)
-        } else {
-            None
-        };
-        divide += if max_frequency % frequency_hz != 0 {
+    /// Supports frequencies from 458Hz to chip-specific maximum (typically 30MHz)
+    pub fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
+        const MAX_FREQUENCY: usize = 30_000_000;
+        const MIN_FREQUENCY: usize = MAX_FREQUENCY / (u16::MAX as usize + 1) + 1;
+
+        let divisor = if frequency_hz > MAX_FREQUENCY {
+            log::warn!("frequency has out of range[{MIN_FREQUENCY}-{MAX_FREQUENCY}Hz]");
             1
+        } else if frequency_hz < MIN_FREQUENCY {
+            log::warn!("frequency has out of range[{MIN_FREQUENCY}-{MAX_FREQUENCY}Hz]");
+            u16::MAX as usize + 1
         } else {
-            0
+            if MAX_FREQUENCY % frequency_hz != 0 {
+                MAX_FREQUENCY / frequency_hz + 1
+            } else {
+                MAX_FREQUENCY / frequency_hz
+            }
         };
 
-        if divide - 1 > u16::MAX as usize {
-            if divide_by_5.is_some() {
-                divide_by_5 = Some(true);
-                max_frequency /= 5;
-                divide = if divide % 5 != 0 {
-                    divide / 5 + 1
-                } else {
-                    divide / 5
-                };
-            } else {
-                divide_by_5 = None
-            }
-            if divide - 1 > u16::MAX as usize {
-                divide = u16::MAX as usize + 1;
-            }
-        }
-        cmd.set_clock((divide - 1) as u16, divide_by_5);
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_clock((divisor - 1) as u16, Some(false)); // [`EnableClockDivideBy5`] is useless because 458hz is already slow.
         self.write_read(cmd.as_slice(), &mut [])?;
-        log::info!("Frequency set to {}Hz", max_frequency / divide);
-        Ok(max_frequency / divide)
+        log::info!("Frequency set to {}Hz", MAX_FREQUENCY / divisor);
+        Ok(MAX_FREQUENCY / divisor)
     }
     /// Write mpsse command and read response
     fn write_read(&self, write: &[u8], read: &mut [u8]) -> Result<(), FtdiError> {

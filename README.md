@@ -9,7 +9,7 @@ FT232H,FT2232H,FT4232H(InterfaceC and InterfaceD not supported)
 - SWD
 - JtagDetect
 # Todo
-- [ ]support FT2232C and FT4232H(InterfaceC and InterfaceD)
+- [ ]support FT4232H(InterfaceC and InterfaceD)
 - [ ]remove panic and unwrap
 - [ ]rewrite ftdi_eeprom
 # Thanks

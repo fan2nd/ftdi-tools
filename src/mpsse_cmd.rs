@@ -29,9 +29,9 @@ enum MpsseCmd {
     /// Used by [`MpsseCmdBuilder::_wait_on_io_low`].
     _WaitOnIOLow = 0x89,
     /// Used by [`MpsseCmdBuilder::set_clock`].
-    DisableClockDivide = 0x8A,
+    DisableClockDivideBy5 = 0x8A,
     /// Used by [`MpsseCmdBuilder::set_clock`].
-    EnableClockDivide = 0x8B,
+    EnableClockDivideBy5 = 0x8B,
     /// Used by .
     Enable3PhaseClocking = 0x8C,
     /// Used by [`MpsseCmdBuilder::enable_3phase_data_clocking`].
@@ -148,10 +148,10 @@ impl MpsseCmdBuilder {
     /// Set the MPSSE clock frequency using provided
     /// divisor value and clock divider configuration.
     /// Both parameters are device dependent.
-    pub fn set_clock(&mut self, divisor: u16, clkdiv: Option<bool>) -> &mut Self {
-        match clkdiv {
-            Some(true) => self.cmd.push(MpsseCmd::EnableClockDivide as u8),
-            Some(false) => self.cmd.push(MpsseCmd::DisableClockDivide as u8),
+    pub fn set_clock(&mut self, divisor: u16, clk_div_by5: Option<bool>) -> &mut Self {
+        match clk_div_by5 {
+            Some(true) => self.cmd.push(MpsseCmd::EnableClockDivideBy5 as u8),
+            Some(false) => self.cmd.push(MpsseCmd::DisableClockDivideBy5 as u8),
             None => {}
         };
         self.cmd.extend_from_slice(&[
