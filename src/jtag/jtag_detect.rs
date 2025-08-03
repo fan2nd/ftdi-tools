@@ -1,4 +1,8 @@
-use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError, mpsse_cmd::MpsseCmdBuilder};
+use crate::{
+    ftdaye::FtdiError,
+    mpsse::{FtdiMpsse, Pin, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 pub struct JtagDetectTdo {

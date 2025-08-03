@@ -1,6 +1,8 @@
-use crate::ftdaye::FtdiError;
-use crate::mpsse_cmd::MpsseCmdBuilder;
-use crate::{FtdiMpsse, Pin, PinUse};
+use crate::{
+    ftdaye::FtdiError,
+    mpsse::{FtdiMpsse, Pin, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use eh1::spi::{Error, ErrorKind, ErrorType, SpiBus};
 use std::sync::{Arc, Mutex};
 
@@ -8,12 +10,6 @@ const SCK_MASK: u8 = 1 << 0;
 const MOSI_MASK: u8 = 1 << 1;
 #[allow(unused)]
 const MISO_MASK: u8 = 1 << 2;
-
-impl Error for FtdiError {
-    fn kind(&self) -> ErrorKind {
-        ErrorKind::Other
-    }
-}
 
 // Spi only support mode0 and mode2
 // TDI(AD1) can only can output on second edge.
@@ -93,6 +89,12 @@ impl FtdiSpi {
             SpiMode::LsbMode2 => (true, true),
         };
         Ok(())
+    }
+}
+
+impl Error for FtdiError {
+    fn kind(&self) -> ErrorKind {
+        ErrorKind::Other
     }
 }
 

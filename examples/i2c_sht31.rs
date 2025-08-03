@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use ftdi_tools::{FtdiI2c, FtdiMpsse, list_all_device};
+use ftdi_tools::{i2c::FtdiI2c, list_all_device, mpsse::FtdiMpsse};
 use sht31::prelude::*;
 
 fn main() -> anyhow::Result<()> {

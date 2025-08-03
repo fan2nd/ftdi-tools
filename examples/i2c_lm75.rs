@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
-use ftdi_tools::{FtdiI2c, FtdiMpsse, list_all_device};
+use ftdi_tools::{i2c::FtdiI2c, list_all_device, mpsse::FtdiMpsse};
 use lm75::Lm75;
 
 fn main() -> anyhow::Result<()> {

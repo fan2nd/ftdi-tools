@@ -3,7 +3,11 @@ use std::{
     time::Instant,
 };
 
-use ftdi_tools::{FtdiMpsse, JtagDetectTdi, JtagDetectTdo, Pin, list_all_device};
+use ftdi_tools::{
+    jtag::{JtagDetectTdi, JtagDetectTdo},
+    list_all_device,
+    mpsse::{FtdiMpsse, Pin},
+};
 use itertools::Itertools;
 
 fn main() -> anyhow::Result<()> {

@@ -1,6 +1,8 @@
-use crate::ftdaye::FtdiError;
-use crate::mpsse_cmd::MpsseCmdBuilder;
-use crate::{FtdiMpsse, Pin, PinUse};
+use crate::{
+    ftdaye::FtdiError,
+    mpsse::{FtdiMpsse, Pin, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use std::sync::{Arc, Mutex};
 
 /// FTDI GPIO output pin abstraction

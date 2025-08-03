@@ -56,7 +56,7 @@ enum MpsseCmd {
 /// When tms_write is true:
 ///
 /// TMS(AD3) can only can output on second edge.
-#[bitfield_struct::bitfield(u8)]
+#[bitfield_struct::bitfield(u8, order = Lsb)]
 struct MpsseShiftCmd {
     is_tdi_neg_write: bool,
     #[bits(default = true)] // when tms enable, this const true

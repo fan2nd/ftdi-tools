@@ -1,6 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use ftdi_tools::{FtdiMpsse, FtdiSwd, SwdAddr, list_all_device};
+use ftdi_tools::{
+    list_all_device,
+    mpsse::FtdiMpsse,
+    swd::{FtdiSwd, SwdAddr},
+};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

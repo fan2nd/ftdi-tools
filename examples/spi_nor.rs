@@ -1,7 +1,12 @@
 use std::sync::{Arc, Mutex};
 
 use eh1::{digital::OutputPin, spi::SpiBus};
-use ftdi_tools::{FtdiMpsse, FtdiOutputPin, FtdiSpi, Pin, list_all_device};
+use ftdi_tools::{
+    gpio::FtdiOutputPin,
+    list_all_device,
+    mpsse::{FtdiMpsse, Pin},
+    spi::FtdiSpi,
+};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();

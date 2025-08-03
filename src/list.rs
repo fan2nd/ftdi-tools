@@ -1,6 +1,6 @@
 use nusb::DeviceInfo;
 
-use crate::{Interface, ftdaye::ChipType};
+use crate::ftdaye::{ChipType, Interface};
 /// Known properties associated to particular FTDI chip types.
 
 #[derive(Debug, Clone, Copy)]

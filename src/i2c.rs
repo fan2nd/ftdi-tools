@@ -1,7 +1,9 @@
 use self::cmd::I2cCmdBuilder;
-use crate::ftdaye::FtdiError;
-use crate::mpsse_cmd::MpsseCmdBuilder;
-use crate::{FtdiMpsse, Pin, PinUse};
+use crate::{
+    ftdaye::FtdiError,
+    mpsse::{FtdiMpsse, Pin, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 
@@ -345,7 +347,10 @@ mod cmd {
     const DATA_BITS: usize = 8;
     const ACK_BITS: usize = 1;
 
-    use crate::{FtdiMpsse, Pin, mpsse_cmd::MpsseCmdBuilder};
+    use crate::{
+        mpsse::{FtdiMpsse, Pin},
+        mpsse_cmd::MpsseCmdBuilder,
+    };
     use std::{
         ops::{Deref, DerefMut},
         sync::MutexGuard,

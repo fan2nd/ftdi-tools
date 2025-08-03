@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use self::cmd::SwdCmdBuilder;
-use crate::{FtdiMpsse, Pin, PinUse, ftdaye::FtdiError};
+use crate::{
+    ftdaye::FtdiError,
+    mpsse::{FtdiMpsse, Pin, PinUse},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiSwdError {
@@ -212,7 +215,10 @@ mod cmd {
     const TCK_INIT_VALUE: bool = false;
     const IS_LSB: bool = true;
 
-    use crate::{FtdiMpsse, Pin, mpsse_cmd::MpsseCmdBuilder};
+    use crate::{
+        mpsse::{FtdiMpsse, Pin},
+        mpsse_cmd::MpsseCmdBuilder,
+    };
     use std::{
         ops::{Deref, DerefMut},
         sync::MutexGuard,

@@ -1,2 +1,5 @@
-pub(crate) mod hw_jtag;
-pub(crate) mod jtag_detect;
+mod hw_jtag;
+mod jtag_detect;
+
+pub use hw_jtag::FtdiJtag;
+pub use jtag_detect::{JtagDetectTdi, JtagDetectTdo};

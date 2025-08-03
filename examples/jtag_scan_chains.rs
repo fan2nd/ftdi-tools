@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Ok;
-use ftdi_tools::{FtdiJtag, FtdiMpsse, list_all_device};
+use ftdi_tools::{jtag::FtdiJtag, list_all_device, mpsse::FtdiMpsse};
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
