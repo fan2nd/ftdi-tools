@@ -106,8 +106,7 @@ impl FtdiMpsse {
     /// Result containing FtdiMpsse instance or FtdiError
     pub fn open(
         usb_device: &nusb::DeviceInfo,
-        interface: Interface,
-        mask: u8,
+        interface: Interface
     ) -> Result<Self, FtdiError> {
         let handle = usb_device.open()?;
         let max_packet_size = {
@@ -146,7 +145,7 @@ impl FtdiMpsse {
 
         let handle = handle.detach_and_claim_interface(interface as u8 - 1)?;
 
-        let context = FtdiContext::new(handle, interface, max_packet_size).into_mpsse(mask)?;
+        let context = FtdiContext::new(handle, interface, max_packet_size).into_mpsse(0)?;
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(0, 0) // set all pin to input and value 0;
             .set_gpio_upper(0, 0) // set all pin to input and value 0;

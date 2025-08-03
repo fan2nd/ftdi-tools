@@ -70,7 +70,7 @@ impl JtagCmdBuilder {
         assert!(bits_count != 0);
         let bytes_count = (bits_count - 1) >> 3;
         let remain_bits = (bits_count - 1) & 0b111;
-        let last_bit = Default::default(); // 
+        let last_bit = Default::default(); // the last bit of tdi when shift2exit
         self.clock_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
             .clock_bits_in(TCK_INIT_VALUE, IS_LSB, remain_bits)
             .clock_tms(0b0000_0001, last_bit, 1);
@@ -158,7 +158,7 @@ impl FtdiJtag {
             mtx,
             is_idle: false,
             adaptive_clocking: false,
-            direction: Default::default(),
+            direction: None,
         })
     }
     /// Enables/disables adaptive clocking (RTCK)

@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let devices = list_all_device();
     assert!(!devices.is_empty(), "Not found Ftdi devices");
-    let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0], 0)?;
+    let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0])?;
     let mtx = Arc::new(Mutex::new(mpsse));
     let mut i2c = FtdiI2c::new(mtx)?;
     let addr_set = i2c.scan();
