@@ -25,8 +25,6 @@ const IS_LSB: bool = true;
 pub struct FtdiJtag {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
-    /// Tracks if the JTAG state machine is in idle state
-    is_idle: bool,
     /// Whether adaptive clocking (RTCK) is enabled
     adaptive_clocking: bool,
     /// Optional custom pin assignments for JTAG signals
@@ -76,7 +74,6 @@ impl FtdiJtag {
         }
         Ok(Self {
             mtx,
-            is_idle: false,
             adaptive_clocking: false,
             direction: None,
         })
@@ -139,10 +136,9 @@ impl FtdiJtag {
         cmd.jtag_any2idle();
         let lock = self.mtx.lock().unwrap();
         lock.write_read(cmd.as_slice(), &mut [])?;
-        self.is_idle = true;
         Ok(())
     }
-    pub fn scan_with(&mut self, tdi: bool) -> Result<Vec<Option<u32>>, FtdiError> {
+    pub fn scan_with(&mut self, tdi: bool) -> Result<Vec<u32>, FtdiError> {
         const ID_LEN: usize = 32;
         let mut cmd = JtagCmdBuilder::new();
         cmd.jtag_any2idle().jtag_idle2dr();
@@ -167,7 +163,7 @@ impl FtdiJtag {
             for tdo_val in tdos {
                 // bypass
                 if bit_count == 0 && !tdo_val {
-                    idcodes.push(None);
+                    idcodes.push(0);
                     consecutive_zeros += 1;
                 } else {
                     current_id = (current_id >> 1) | if tdo_val { 0x8000_0000 } else { 0 };
@@ -184,7 +180,7 @@ impl FtdiJtag {
                     if current_id == u32::MAX {
                         break 'outer;
                     }
-                    idcodes.push(Some(current_id));
+                    idcodes.push(current_id);
                     bit_count = 0;
                 }
             }
@@ -197,9 +193,8 @@ impl FtdiJtag {
     pub fn write(&self, ir: &[u8], irlen: usize, dr: &[u8], drlen: usize) -> Result<(), FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_idle {
-            cmd.jtag_any2idle();
-        }
+
+        cmd.jtag_any2idle();
         cmd.jtag_idle2ir()
             .jtag_shift_write(ir, irlen)
             .jtag_ir_exit2dr()
@@ -213,9 +208,7 @@ impl FtdiJtag {
     pub fn read(&self, ir: &[u8], irlen: usize, drlen: usize) -> Result<Vec<u8>, FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_idle {
-            cmd.jtag_any2idle();
-        }
+        cmd.jtag_any2idle();
         cmd.jtag_idle2ir()
             .jtag_shift_write(ir, irlen)
             .jtag_ir_exit2dr()
@@ -241,9 +234,7 @@ impl FtdiJtag {
     ) -> Result<Vec<u8>, FtdiError> {
         log::warn!("Not test");
         let mut cmd = JtagCmdBuilder::new();
-        if !self.is_idle {
-            cmd.jtag_any2idle();
-        }
+        cmd.jtag_any2idle();
         cmd.jtag_idle2ir()
             .jtag_shift_write(ir, irlen)
             .jtag_ir_exit2dr()

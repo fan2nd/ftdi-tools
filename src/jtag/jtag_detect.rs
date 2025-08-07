@@ -194,7 +194,7 @@ impl JtagDetectTdi {
     /// 4. Detects IDCODEs by accumulating 32-bit sequences
     /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
     /// 6. Exits to Run-Test/Idle through Exit1-DR → Update-DR
-    pub fn scan_with(&self, tdi_val: bool) -> Result<Vec<Option<u32>>, FtdiError> {
+    pub fn scan_with(&self, tdi_val: bool) -> Result<Vec<u32>, FtdiError> {
         const ID_LEN: usize = 32;
         // Shift TDI value and read TDO until 32 consecutive 0s detected
         let mut idcodes = Vec::new();
@@ -210,7 +210,7 @@ impl JtagDetectTdi {
             for tdo_val in tdos {
                 // Bypass detection - no device present
                 if bit_count == 0 && !tdo_val {
-                    idcodes.push(None);
+                    idcodes.push(0);
                     consecutive_bypass += 1;
                 } else {
                     // Accumulate IDCODE bits (MSB first)
@@ -227,7 +227,7 @@ impl JtagDetectTdi {
                     if current_id == u32::MAX {
                         break 'outer;
                     }
-                    idcodes.push(Some(current_id));
+                    idcodes.push(current_id);
                     bit_count = 0;
                 }
             }
