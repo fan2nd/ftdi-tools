@@ -256,32 +256,43 @@ impl FtdiJtag {
 }
 
 struct JtagCmdBuilder(MpsseCmdBuilder);
+impl Deref for JtagCmdBuilder {
+    type Target = MpsseCmdBuilder;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl DerefMut for JtagCmdBuilder {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 impl JtagCmdBuilder {
     fn new() -> Self {
         JtagCmdBuilder(MpsseCmdBuilder::new())
     }
     fn jtag_any2idle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0001_1111, true, 6);
+        self.clock_tms_out(0b0001_1111, true, 6);
         self
     }
     fn jtag_idle_cycle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0, true, 7);
+        self.clock_tms_out(0, true, 7);
         self
     }
     fn jtag_idle2ir(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0011, true, 4);
+        self.clock_tms_out(0b0000_0011, true, 4);
         self
     }
     fn jtag_ir_exit2dr(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0011, true, 4);
+        self.clock_tms_out(0b0000_0011, true, 4);
         self
     }
     fn jtag_idle2dr(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0001, true, 3);
+        self.clock_tms_out(0b0000_0001, true, 3);
         self
     }
     fn jtag_dr_exit2idle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0001, true, 2);
+        self.clock_tms_out(0b0000_0001, true, 2);
         self
     }
     fn jtag_shift(&mut self, data: &[u8], bits_count: usize) -> &mut Self {
@@ -325,16 +336,5 @@ impl JtagCmdBuilder {
             response[bytes_count] |= (response[bytes_count + 1] & 0b1000_0000) >> (7 - remain_bits);
         }
         bytes_count + 1
-    }
-}
-impl Deref for JtagCmdBuilder {
-    type Target = MpsseCmdBuilder;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for JtagCmdBuilder {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }

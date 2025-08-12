@@ -29,11 +29,12 @@ impl From<SwdAddr> for u8 {
     fn from(value: SwdAddr) -> Self {
         // Timing Sequence: [Start(1), APnDP, RnW, A[2:3], Parity, Stop(0), Park(1)]
         // LSB Format: [Park(1), Stop(0), Parity, A[3:2], RnW, APnDP, Start(1)]
+        //             [   7   ,    6   ,    5  , [4:3] ,  2 ,   1  ,    0    ]
         const AP_MASK: u8 = 1 << 1;
-        const ADDR_MASK: u8 = 0b11 << 2;
+        const ADDR_MASK: u8 = 0b11 << 3;
         match value {
-            SwdAddr::Dp(addr) => addr << 1 & ADDR_MASK,
-            SwdAddr::Ap(addr) => addr << 1 & ADDR_MASK | AP_MASK,
+            SwdAddr::Dp(addr) => (addr << 1) & ADDR_MASK,
+            SwdAddr::Ap(addr) => (addr << 1) & ADDR_MASK | AP_MASK,
         }
     }
 }
@@ -110,9 +111,10 @@ impl FtdiSwd {
         lock.write_read(cmd.as_slice(), &mut [])?;
         Ok(())
     }
-    /// Build SWD request packet (lsb 8 bits)
-    /// Timing Sequence: [Start(1), APnDP, RnW, A[2:3], Parity, Stop(0), Park(1)]
-    /// LSB Format: [Park(1), Stop(0), Parity, A[3:2], RnW, APnDP, Start(1)]
+    // Build SWD request packet (lsb 8 bits)
+    // Timing Sequence: [Start(1), APnDP, RnW, A[2:3], Parity, Stop(0), Park(1)]
+    // LSB Format: [Park(1), Stop(0), Parity, A[3:2], RnW, APnDP, Start(1)]
+    //             [   7   ,    6   ,    5  , [4:3] ,  2 ,   1  ,    0    ]
     fn build_request(is_read: bool, addr: SwdAddr) -> u8 {
         const START_MASK: u8 = 1 << 0;
         const READ_MASK: u8 = 1 << 2;
@@ -125,8 +127,8 @@ impl FtdiSwd {
         // The parity check is made over the APnDP, RnW and A[2:3] bits. If, of these four bits:
         // • the number of bits set to 1 is odd, then the parity bit is set to 1
         // • the number of bits set to 1 is even, then the parity bit is set to 0.
-        let parity = ((request >> 1) & 0x0F).count_ones();
-        request |= if parity != 0 { PARITY_MASK } else { 0 }; // Set parity bit (position 5)
+        let parity = ((request >> 1) & 0x0F).count_ones() & 1 != 0;
+        request |= if parity { PARITY_MASK } else { 0 }; // Set parity bit (position 5)
 
         request
     }
