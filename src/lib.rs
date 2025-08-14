@@ -28,9 +28,8 @@ pub mod gpio;
 pub mod i2c;
 pub mod jtag;
 mod list;
+pub use list::list_all_device;
 pub mod mpsse;
 mod mpsse_cmd;
 pub mod spi;
 pub mod swd;
-
-pub use list::list_all_device;
