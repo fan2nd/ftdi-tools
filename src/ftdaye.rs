@@ -108,7 +108,7 @@ pub(crate) struct FtdiContext {
     /// USB device handle
     handle: nusb::Interface,
     /// FTDI device interface
-    interface_index: u16,
+    interface: Interface,
     write_ep: u8,
     read_ep: u8,
     max_packet_size: usize,
@@ -122,7 +122,7 @@ impl FtdiContext {
     ) -> Self {
         Self {
             handle,
-            interface_index: interface.index(),
+            interface,
             write_ep: interface.write_ep(),
             read_ep: interface.read_ep(),
             max_packet_size,
@@ -143,7 +143,7 @@ impl FtdiContext {
                     recipient: Recipient::Device,
                     request,
                     value,
-                    index: self.interface_index,
+                    index: self.interface.index(),
                 },
                 &[],
                 Duration::from_secs(1),

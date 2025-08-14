@@ -12,6 +12,7 @@ FT232H,FT2232H,FT4232H(InterfaceC and InterfaceD not supported)
 - [ ]support FT4232H(InterfaceC and InterfaceD)
 - [ ]remove panic and unwrap
 - [ ]rewrite ftdi_eeprom
+- [ ]add [spi-flash](https://github.com/adamgreig/spi-flash-rs)
 # Thanks
 - [ftdi-embedded-hal](https://github.com/ftdi-rs/ftdi-embedded-hal)
 - [ftdi-mpsse](https://github.com/ftdi-rs/ftdi-mpsse)
