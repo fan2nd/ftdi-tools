@@ -561,7 +561,7 @@ mod test {
         assert_eq!(0x3eu8, MpsseShiftCmd::shift(true, true, true, true, true));
 
         // AN108-3.5
-        // Note: The table in 3.5 is not correct.
+        // NOTE: The table in 3.5 is not correct.
         assert_eq!(0x4au8, MpsseShiftCmd::_tms_shift(true, false, false)); // Not used.
         assert_eq!(0x4au8, MpsseShiftCmd::_tms_shift(true, true, false)); // Not used.
         assert_eq!(0x4bu8, MpsseShiftCmd::_tms_shift(false, false, false));
