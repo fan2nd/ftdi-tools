@@ -246,7 +246,8 @@ dependencies = [
  "log",
  "nusb",
  "sht31",
- "spi-flash",
+ "spi-flash 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spi-flash 0.3.0 (git+https://github.com/fan2nd/spi-flash-rs)",
  "thiserror 2.0.12",
 ]
 
@@ -613,6 +614,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0acbbeaff3f7f7a5bdad8bd2ecfa1675876ba76007e9c56f23fb123d01e3a09"
 dependencies = [
  "anyhow",
+ "indicatif",
+ "jep106",
+ "log",
+ "num_enum",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "spi-flash"
+version = "0.3.0"
+source = "git+https://github.com/fan2nd/spi-flash-rs#df0dbd95f753023be385389f5a52e571cc6961ba"
+dependencies = [
+ "embedded-hal",
  "indicatif",
  "jep106",
  "log",
