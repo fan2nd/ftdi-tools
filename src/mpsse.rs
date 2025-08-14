@@ -64,41 +64,45 @@ impl FtdiMpsse {
     /// Result containing FtdiMpsse instance or FtdiError
     pub fn open(usb_device: &nusb::DeviceInfo, interface: Interface) -> Result<Self, FtdiError> {
         let handle = usb_device.open()?;
-        let max_packet_size = {
-            let interface_alt_settings: Vec<_> = handle
-                .active_configuration()?
-                .interface_alt_settings()
-                .collect();
-            let endpoints: Vec<_> = interface_alt_settings[interface as usize - 1]
-                .endpoints()
-                .collect();
-            endpoints[0].max_packet_size()
-        };
+        let max_packet_size = handle
+            .active_configuration()
+            .map_err(|e| FtdiError::Usb(e.into()))?
+            .interface_alt_settings()
+            .next()
+            .ok_or(FtdiError::OpenFailed(
+                "Failed to get interface info".to_string(),
+            ))?
+            .endpoints()
+            .next()
+            .ok_or(FtdiError::OpenFailed(
+                "Failed to get endpoint info".to_string(),
+            ))?
+            .max_packet_size();
         let chip_type = match (
             usb_device.device_version(),
             usb_device.serial_number().unwrap_or(""),
         ) {
-            // (0x400, _) | (0x200, "") => ChipType::Bm,
-            // (0x200, _) => ChipType::Am,
-            // (0x500, _) => ChipType::FT2232C,
-            // (0x600, _) => ChipType::R,
+            (0x400, _) | (0x200, "") => return Err(FtdiError::UnsupportedChipType(ChipType::Bm)),
+            (0x200, _) => return Err(FtdiError::UnsupportedChipType(ChipType::Am)),
+            (0x500, _) => return Err(FtdiError::UnsupportedChipType(ChipType::FT2232C)),
+            (0x600, _) => return Err(FtdiError::UnsupportedChipType(ChipType::R)),
             (0x700, _) => ChipType::FT2232H,
             (0x800, _) => ChipType::FT4232H,
             (0x900, _) => ChipType::FT232H,
-            // (0x1000, _) => ChipType::FT230X,
+            (0x1000, _) => return Err(FtdiError::UnsupportedChipType(ChipType::FT230X)),
             (version, _) => {
-                return Err(FtdiError::Other(format!(
+                return Err(FtdiError::OpenFailed(format!(
                     "Unknown ChipType version:0x{version:x}"
                 )));
             }
         };
         if !chip_type.mpsse_list().contains(&interface) {
-            return Err(FtdiError::Other(format!(
-                "{chip_type:?} do not has {interface:?}"
+            return Err(FtdiError::OpenFailed(format!(
+                "{chip_type:?} do not support Interface::{interface:?}"
             )));
         }
 
-        let handle = handle.detach_and_claim_interface(interface as u8 - 1)?;
+        let handle = handle.detach_and_claim_interface(interface.interface_number())?;
 
         let context = FtdiContext::new(handle, interface, max_packet_size).into_mpsse(0)?;
         let mut cmd = MpsseCmdBuilder::new();

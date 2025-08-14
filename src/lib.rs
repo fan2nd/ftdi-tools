@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 
 mod ftdaye;
+pub use ftdaye::Interface;
 pub mod gpio;
 pub mod i2c;
 pub mod jtag;

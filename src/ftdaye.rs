@@ -1,8 +1,5 @@
 use futures_lite::future::{block_on, zip};
-use nusb::{
-    descriptors::ActiveConfigurationError,
-    transfer::{Control, ControlType, Recipient, RequestBuffer},
-};
+use nusb::transfer::{Control, ControlType, Recipient, RequestBuffer};
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -15,20 +12,17 @@ pub enum FtdiError {
     /// permission to access it.
     Usb(#[from] nusb::Error),
 
+    #[error("Open failed: {0}")]
+    /// Error occurs when open.
+    OpenFailed(String),
+
     #[error("Unsupported chip type: {0:?}")]
     /// The connected device is not supported by the driver.
     UnsupportedChipType(ChipType),
 
-    #[error("Failed to get active configuration")]
-    ActiveConfigurationError(#[from] ActiveConfigurationError),
-
-    #[error("Bad Mpsse Command: {0:?}")]
+    #[error("Bad Mpsse Command: {0:#x}")]
     /// The connected device is not supported by the driver.
     BadMpsseCommand(u8),
-
-    #[error("{0}")]
-    /// An unspecified error occurred.
-    Other(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +97,10 @@ impl Interface {
 
     fn index(&self) -> u16 {
         *self as u16
+    }
+
+    pub(crate) fn interface_number(&self) -> u8 {
+        (*self as u8) - 1
     }
 }
 
