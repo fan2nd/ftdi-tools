@@ -23,7 +23,9 @@ fn main() -> anyhow::Result<()> {
     let gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
     let mut flash_device = RefCellDevice::new_no_delay(&spi, gpio)?;
     let mut flash = Flash::new(&mut flash_device);
-    let param = flash.read_params().unwrap().unwrap();
-    println!("{param:#x?}");
+    let id = flash.read_id()?;
+    println!("{id}");
+    let param = flash.read_params()?.unwrap();
+    println!("{param}");
     Ok(())
 }
