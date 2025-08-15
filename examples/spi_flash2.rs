@@ -1,6 +1,9 @@
 use std::{
     cell::RefCell,
+    fs::File,
+    io::Read,
     sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use embedded_hal_bus::spi::RefCellDevice;
@@ -17,7 +20,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let devices = list_all_device();
     assert!(!devices.is_empty(), "Not found Ftdi devices");
-    let mpsse = FtdiMpsse::open(&devices[0].usb_device, Interface::B)?;
+    let mpsse = FtdiMpsse::open(&devices[0].usb_device, Interface::A)?;
     let mtx = Arc::new(Mutex::new(mpsse));
     let spi = RefCell::new(FtdiSpi::new(mtx.clone())?);
     let gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
@@ -27,5 +30,9 @@ fn main() -> anyhow::Result<()> {
     println!("{id}");
     let param = flash.read_params()?.unwrap();
     println!("{param}");
+    let now = Instant::now();
+    let data: Vec<_> = (0..param.capacity_bytes()).map(|x| x as u8).collect();
+    flash.program_progress(0, &data, true)?;
+    println!("{:?}", now.elapsed());
     Ok(())
 }

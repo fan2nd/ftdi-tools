@@ -215,7 +215,7 @@ impl FtdiSpiHalfduplex {
         Ok(())
     }
     /// set spi bps
-    pub fn set_bps(&mut self, bps: usize) -> Result<usize, FtdiError> {
+    pub fn set_frequency(&mut self, bps: usize) -> Result<usize, FtdiError> {
         let lock = self.mtx.lock().unwrap();
         lock.set_frequency(bps)
     }

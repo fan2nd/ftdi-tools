@@ -112,7 +112,8 @@ impl FtdiMpsse {
             .set_gpio_upper(0, 0) // set all pin to input and value 0;
             .enable_loopback(false)
             .enable_3phase_data_clocking(false)
-            .enable_adaptive_clocking(false);
+            .enable_adaptive_clocking(false)
+            .set_clock(0, Some(false));
         context.write_read(cmd.as_slice(), &mut [])?;
 
         Ok(Self {
