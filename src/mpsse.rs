@@ -44,6 +44,8 @@ pub(crate) struct GpioByte {
 pub struct FtdiMpsse {
     /// FTDI device context handle
     ft: FtdiContext,
+    /// FTDI device interface
+    interface: Interface,
     /// Type of FTDI chip (e.g., FT232H, FT2232H)
     chip_type: ChipType,
     /// Lower 8 GPIO pins state tracker
@@ -96,7 +98,7 @@ impl FtdiMpsse {
                 )));
             }
         };
-        if !chip_type.mpsse_list().contains(&interface) {
+        if !chip_type.interface_list().contains(&interface) {
             return Err(FtdiError::OpenFailed(format!(
                 "{chip_type:?} do not support Interface::{interface:?}"
             )));
@@ -115,6 +117,7 @@ impl FtdiMpsse {
 
         Ok(Self {
             ft: context,
+            interface,
             chip_type,
             lower: Default::default(),
             upper: Default::default(),
@@ -160,13 +163,22 @@ impl FtdiMpsse {
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn alloc_pin(&mut self, pin: Pin, purpose: PinUse) {
+        if !self.chip_type.mpsse_list().contains(&self.interface)
+            && (purpose != PinUse::Input || purpose != PinUse::Output)
+        {
+            panic!(
+                "Interface::{:?} only can be used as Input or Output.",
+                self.interface
+            );
+        }
         let (byte, idx) = match pin {
             Pin::Lower(idx) => (&mut self.lower, idx),
             Pin::Upper(idx) => {
                 assert!(
                     idx < self.chip_type.upper_pins(),
-                    "{:?} do not has {:?}",
+                    "{:?} Interface::{:?} do not has {:?}",
                     self.chip_type,
+                    self.interface,
                     pin
                 );
                 (&mut self.upper, idx)

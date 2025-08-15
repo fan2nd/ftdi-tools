@@ -1,6 +1,6 @@
 # FTDI
 # Supported Chips
-FT232H,FT2232H,FT4232H(InterfaceC and InterfaceD not supported)
+FT232H,FT2232H,FT4232H
 # Supported Function
 - GPIO
 - SPI
@@ -9,7 +9,6 @@ FT232H,FT2232H,FT4232H(InterfaceC and InterfaceD not supported)
 - SWD
 - JtagDetect
 # Todo
-- [ ]support FT4232H(InterfaceC and InterfaceD)
 - [ ]remove panic and unwrap
 - [ ]rewrite ftdi_eeprom
 # Thanks
