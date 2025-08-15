@@ -1,7 +1,5 @@
 use std::{
     cell::RefCell,
-    fs::File,
-    io::Read,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -30,9 +28,7 @@ fn main() -> anyhow::Result<()> {
     println!("{id}");
     let param = flash.read_params()?.unwrap();
     println!("{param}");
-    let now = Instant::now();
     let data: Vec<_> = (0..param.capacity_bytes()).map(|x| x as u8).collect();
     flash.program_progress(0, &data, true)?;
-    println!("{:?}", now.elapsed());
     Ok(())
 }
