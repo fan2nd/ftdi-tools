@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use self::cmd::SwdCmdBuilder;
-use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse};
+use crate::{
+    FtdiError, Pin,
+    mpsse::{FtdiMpsse, PinUse},
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiSwdError {

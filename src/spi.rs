@@ -1,4 +1,8 @@
-use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
+use crate::{
+    FtdiError, Pin,
+    mpsse::{FtdiMpsse, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use eh1::spi::{Error, ErrorKind, ErrorType, SpiBus};
 use std::sync::{Arc, Mutex};
 

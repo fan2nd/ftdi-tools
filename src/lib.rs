@@ -117,16 +117,6 @@ impl Pin {
         }
     }
 }
-/// State tracker for each pin on the FTDI chip.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PinUse {
-    Output,
-    Input,
-    I2c,
-    Spi,
-    Jtag,
-    Swd,
-}
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiError {
     #[error("A USB transport error occurred.")]
@@ -160,14 +150,14 @@ pub enum FtdiError {
     )]
     PinInUsed {
         pin: Pin,
-        purpose: PinUse,
-        current: PinUse,
+        purpose: mpsse::PinUse,
+        current: mpsse::PinUse,
     },
 
     #[error("{chip:?} Interface::{interface:?} can not be used for {usage:?}")]
     IncorrectUsage {
         chip: ChipType,
         interface: Interface,
-        usage: PinUse,
+        usage: mpsse::PinUse,
     },
 }

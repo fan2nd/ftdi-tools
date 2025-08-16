@@ -1,6 +1,14 @@
-use crate::{
-    ChipType, FtdiError, Interface, Pin, PinUse, ftdaye::FtdiContext, mpsse_cmd::MpsseCmdBuilder,
-};
+use crate::{ChipType, FtdiError, Interface, Pin, ftdaye::FtdiContext, mpsse_cmd::MpsseCmdBuilder};
+/// State tracker for each pin on the FTDI chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PinUse {
+    Output,
+    Input,
+    I2c,
+    Spi,
+    Jtag,
+    Swd,
+}
 /// Manages a bank of 8 GPIO pins
 /// Tracks direction, current value, and allocated protocol usage
 #[derive(Debug, Default)]
@@ -146,7 +154,7 @@ impl FtdiMpsse {
                 interface: self.interface,
                 usage: purpose,
             });
-        }
+        };
         let (byte, idx) = match pin {
             Pin::Lower(idx) => {
                 if idx >= 8 {

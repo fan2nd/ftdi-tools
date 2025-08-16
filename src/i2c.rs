@@ -1,5 +1,9 @@
 use self::cmd::I2cCmdBuilder;
-use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
+use crate::{
+    FtdiError, Pin,
+    mpsse::{FtdiMpsse, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
+};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 

@@ -1,5 +1,8 @@
 use crate::{
-    FtdiError, Pin, PinUse, gpio::FtdiOutputPin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder,
+    FtdiError, Pin,
+    gpio::FtdiOutputPin,
+    mpsse::{FtdiMpsse, PinUse},
+    mpsse_cmd::MpsseCmdBuilder,
 };
 use std::{
     ops::{Deref, DerefMut},
