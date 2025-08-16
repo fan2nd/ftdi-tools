@@ -1,6 +1,6 @@
 use nusb::DeviceInfo;
 
-use crate::ftdaye::{ChipType, Interface};
+use crate::{ChipType, Interface};
 /// Known properties associated to particular FTDI chip types.
 
 #[derive(Debug, Clone, Copy)]
@@ -85,8 +85,8 @@ pub fn list_all_device() -> Vec<FtdiDeviceInfo> {
         }
         None
     }
-    nusb::list_devices()
-        .unwrap()
-        .filter_map(filter_map)
-        .collect()
+    match nusb::list_devices() {
+        Err(_) => Vec::new(),
+        Ok(devices) => devices.filter_map(filter_map).collect(),
+    }
 }

@@ -1,8 +1,5 @@
 use crate::{
-    ftdaye::FtdiError,
-    gpio::FtdiOutputPin,
-    mpsse::{FtdiMpsse, Pin, PinUse},
-    mpsse_cmd::MpsseCmdBuilder,
+    FtdiError, Pin, PinUse, gpio::FtdiOutputPin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder,
 };
 use std::{
     ops::{Deref, DerefMut},
@@ -60,10 +57,10 @@ impl FtdiJtag {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Jtag); // TCK
-            lock.alloc_pin(Pin::Lower(1), PinUse::Jtag); // TDI
-            lock.alloc_pin(Pin::Lower(2), PinUse::Jtag); // TDO (input)
-            lock.alloc_pin(Pin::Lower(3), PinUse::Jtag); // TMS
+            lock.alloc_pin(Pin::Lower(0), PinUse::Jtag)?; // TCK
+            lock.alloc_pin(Pin::Lower(1), PinUse::Jtag)?; // TDI
+            lock.alloc_pin(Pin::Lower(2), PinUse::Jtag)?; // TDO (input)
+            lock.alloc_pin(Pin::Lower(3), PinUse::Jtag)?; // TMS
             // Set TCK, TDI, TMS as output pins (0x0b = 00001011)
             lock.lower.direction |= TCK_MASK | TDI_MASK | TMS_MASK;
             // TCK must initialize to low (AN108-2.2)
@@ -95,7 +92,7 @@ impl FtdiJtag {
         let mut cmd = MpsseCmdBuilder::new();
         if state {
             log::info!("Use {:?} as RTCK.", Pin::Lower(7));
-            lock.alloc_pin(Pin::Lower(7), PinUse::Jtag);
+            lock.alloc_pin(Pin::Lower(7), PinUse::Jtag)?;
         } else {
             log::info!("Free {:?}.", Pin::Lower(7));
             lock.free_pin(Pin::Lower(7));

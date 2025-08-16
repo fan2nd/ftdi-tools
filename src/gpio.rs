@@ -1,8 +1,4 @@
-use crate::{
-    ftdaye::FtdiError,
-    mpsse::{FtdiMpsse, Pin, PinUse},
-    mpsse_cmd::MpsseCmdBuilder,
-};
+use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
 use std::sync::{Arc, Mutex};
 
 /// FTDI GPIO output pin abstraction
@@ -24,10 +20,10 @@ impl Drop for FtdiOutputPin {
 }
 
 impl FtdiOutputPin {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<FtdiOutputPin, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
-        lock.alloc_pin(pin, PinUse::Input);
+        lock.alloc_pin(pin, PinUse::Input)?;
         match pin {
             Pin::Lower(idx) => {
                 lock.lower.direction |= 1 << idx;
@@ -109,10 +105,10 @@ impl Drop for FtdiInputPin {
 }
 
 impl FtdiInputPin {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<FtdiInputPin, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
-        lock.alloc_pin(pin, PinUse::Input);
+        lock.alloc_pin(pin, PinUse::Input)?;
         match pin {
             Pin::Lower(idx) => {
                 lock.lower.direction &= !(1 << idx);

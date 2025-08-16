@@ -1,65 +1,8 @@
+use crate::{FtdiError, Interface};
 use futures_lite::future::{block_on, zip};
 use nusb::transfer::{Control, ControlType, Recipient, RequestBuffer};
 use std::time::Duration;
 
-#[derive(Debug, thiserror::Error)]
-pub enum FtdiError {
-    #[error("A USB transport error occurred.")]
-    ///
-    /// This variant is used for all errors reported by the operating system when performing a USB
-    /// operation. It may indicate that the USB device was unplugged, that another application or an
-    /// operating system driver is currently using it, or that the current user does not have
-    /// permission to access it.
-    Usb(#[from] nusb::Error),
-
-    #[error("Open failed: {0}")]
-    /// Error occurs when open.
-    OpenFailed(String),
-
-    #[error("Unsupported chip type: {0:?}")]
-    /// The connected device is not supported by the driver.
-    UnsupportedChipType(ChipType),
-
-    #[error("Bad Mpsse Command: {0:#x}")]
-    /// The connected device is not supported by the driver.
-    BadMpsseCommand(u8),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChipType {
-    Am,
-    Bm,
-    FT2232C,
-    R,
-    FT2232H,
-    FT4232H,
-    FT232H,
-    FT230X,
-}
-impl ChipType {
-    pub fn interface_list(self) -> &'static [Interface] {
-        match self {
-            ChipType::FT232H => &[Interface::A],
-            ChipType::FT2232H => &[Interface::A, Interface::B],
-            ChipType::FT4232H => &[Interface::A, Interface::B, Interface::C, Interface::D],
-            _ => &[],
-        }
-    }
-    pub fn mpsse_list(self) -> &'static [Interface] {
-        match self {
-            ChipType::FT232H => &[Interface::A],
-            ChipType::FT2232H | ChipType::FT4232H => &[Interface::A, Interface::B],
-            _ => &[],
-        }
-    }
-    pub fn upper_pins(self) -> usize {
-        match self {
-            ChipType::FT232H | ChipType::FT2232H => 8,
-            ChipType::FT4232H => 0,
-            _ => 0,
-        }
-    }
-}
 #[repr(C)]
 #[expect(unused)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -73,43 +16,6 @@ pub(crate) enum BitMode {
     Cbus = 32,
     SyncFf = 64,
     Ft1284 = 128,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Interface {
-    A = 1,
-    B = 2,
-    C = 3,
-    D = 4,
-}
-
-impl Interface {
-    fn read_ep(self) -> u8 {
-        match self {
-            Interface::A => 0x81,
-            Interface::B => 0x83,
-            Interface::C => 0x85,
-            Interface::D => 0x87,
-        }
-    }
-
-    fn write_ep(self) -> u8 {
-        match self {
-            Interface::A => 0x02,
-            Interface::B => 0x04,
-            Interface::C => 0x06,
-            Interface::D => 0x08,
-        }
-    }
-
-    fn index(&self) -> u16 {
-        *self as u16
-    }
-
-    pub(crate) fn interface_number(&self) -> u8 {
-        (*self as u8) - 1
-    }
 }
 
 pub(crate) struct FtdiContext {

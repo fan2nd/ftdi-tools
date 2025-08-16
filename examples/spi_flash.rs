@@ -7,11 +7,7 @@ use anyhow::anyhow;
 use eh1::spi::SpiDevice;
 use embedded_hal_bus::spi::RefCellDevice;
 use ftdi_tools::{
-    Interface,
-    gpio::FtdiOutputPin,
-    list_all_device,
-    mpsse::{FtdiMpsse, Pin},
-    spi::FtdiSpi,
+    Interface, Pin, gpio::FtdiOutputPin, list_all_device, mpsse::FtdiMpsse, spi::FtdiSpi,
 };
 use spi_flash::{Error, Flash, FlashAccess};
 

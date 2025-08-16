@@ -4,9 +4,10 @@ use std::{
 };
 
 use ftdi_tools::{
+    Pin,
     jtag::{JtagDetectTdi, JtagDetectTdo},
     list_all_device,
-    mpsse::{FtdiMpsse, Pin},
+    mpsse::FtdiMpsse,
 };
 use itertools::Itertools;
 

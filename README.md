@@ -9,7 +9,6 @@ FT232H,FT2232H,FT4232H
 - SWD
 - JtagDetect
 # Todo
-- [ ]remove panic and unwrap
 - [ ]rewrite ftdi_eeprom
 # Thanks
 - [ftdi-embedded-hal](https://github.com/ftdi-rs/ftdi-embedded-hal)

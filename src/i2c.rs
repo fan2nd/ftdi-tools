@@ -1,15 +1,11 @@
 use self::cmd::I2cCmdBuilder;
-use crate::{
-    ftdaye::FtdiError,
-    mpsse::{FtdiMpsse, Pin, PinUse},
-    mpsse_cmd::MpsseCmdBuilder,
-};
+use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiI2cError {
-    #[error("Ftdi inner error.")]
+    #[error(transparent)]
     FtdiInner(#[from] FtdiError),
     #[error("Slave not ack.")]
     NoAck(NoAcknowledgeSource),
@@ -46,12 +42,12 @@ impl Drop for FtdiI2c {
 impl FtdiI2c {
     const SLAVE_ACK_MASK: u8 = 1 << 0;
     const SLAVE_NOT_ACK: u8 = Self::SLAVE_ACK_MASK;
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<FtdiI2c, FtdiI2cError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiI2cError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::I2c);
-            lock.alloc_pin(Pin::Lower(1), PinUse::I2c);
-            lock.alloc_pin(Pin::Lower(2), PinUse::I2c);
+            lock.alloc_pin(Pin::Lower(0), PinUse::I2c)?;
+            lock.alloc_pin(Pin::Lower(1), PinUse::I2c)?;
+            lock.alloc_pin(Pin::Lower(2), PinUse::I2c)?;
             // clear direction and value of first 3 pins
             // pins default input and value 0
             // AD0: SCL
@@ -72,12 +68,12 @@ impl FtdiI2c {
         Ok(this)
     }
 
-    pub fn set_direction_pin(&mut self, pin: Pin) {
+    pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiI2cError> {
         let mut lock = self.mtx.lock().unwrap();
         if let Some(pin) = self.direction_pin {
             lock.free_pin(pin);
         }
-        lock.alloc_pin(pin, PinUse::I2c);
+        lock.alloc_pin(pin, PinUse::I2c)?;
         match pin {
             Pin::Lower(idx) => {
                 lock.lower.direction |= 1 << idx;
@@ -86,7 +82,8 @@ impl FtdiI2c {
                 lock.upper.direction |= 1 << idx;
             }
         }
-        self.direction_pin = Some(pin)
+        self.direction_pin = Some(pin);
+        Ok(())
     }
     pub fn enbale_fast(&mut self, enable: bool) {
         self.enable_fast = enable;
@@ -347,10 +344,7 @@ mod cmd {
     const DATA_BITS: usize = 8;
     const ACK_BITS: usize = 1;
 
-    use crate::{
-        mpsse::{FtdiMpsse, Pin},
-        mpsse_cmd::MpsseCmdBuilder,
-    };
+    use crate::{Pin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
     use std::{
         ops::{Deref, DerefMut},
         sync::MutexGuard,

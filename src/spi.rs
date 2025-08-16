@@ -1,8 +1,4 @@
-use crate::{
-    ftdaye::FtdiError,
-    mpsse::{FtdiMpsse, Pin, PinUse},
-    mpsse_cmd::MpsseCmdBuilder,
-};
+use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
 use eh1::spi::{Error, ErrorKind, ErrorType, SpiBus};
 use std::sync::{Arc, Mutex};
 
@@ -23,7 +19,13 @@ pub enum SpiMode {
     MsbMode2,
     LsbMode2,
 }
-
+#[derive(Debug, thiserror::Error)]
+pub enum FtdiSpiError {
+    #[error(transparent)]
+    FtdiInner(#[from] FtdiError),
+    #[error("Function {0} not supported which definded in embedded-hal::spi::SpiBus.")]
+    NotSupported(&'static str),
+}
 /// FTDI SPI bus.
 ///
 /// In embedded-hal version 1 this represents an exclusive SPI bus.
@@ -52,9 +54,9 @@ impl FtdiSpi {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Spi);
-            lock.alloc_pin(Pin::Lower(1), PinUse::Spi);
-            lock.alloc_pin(Pin::Lower(2), PinUse::Spi);
+            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
 
             // default MODE0, SCK(AD0) default 0
             // set SCK(AD0) and MOSI (AD1) as output pins
@@ -92,14 +94,14 @@ impl FtdiSpi {
     }
 }
 
-impl Error for FtdiError {
+impl Error for FtdiSpiError {
     fn kind(&self) -> ErrorKind {
         ErrorKind::Other
     }
 }
 
 impl ErrorType for FtdiSpi {
-    type Error = FtdiError;
+    type Error = FtdiSpiError;
 }
 
 impl SpiBus<u8> for FtdiSpi {
@@ -177,9 +179,9 @@ impl FtdiSpiHalfduplex {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Spi);
-            lock.alloc_pin(Pin::Lower(1), PinUse::Spi);
-            lock.alloc_pin(Pin::Lower(2), PinUse::Spi);
+            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
 
             // default MODE0, SCK(AD0) default 0
             // set SCK(AD0) and MOSI (AD1) as output pins
@@ -222,7 +224,7 @@ impl FtdiSpiHalfduplex {
 }
 
 impl ErrorType for FtdiSpiHalfduplex {
-    type Error = FtdiError;
+    type Error = FtdiSpiError;
 }
 
 impl SpiBus for FtdiSpiHalfduplex {
@@ -250,9 +252,9 @@ impl SpiBus for FtdiSpiHalfduplex {
         Ok(())
     }
     fn transfer(&mut self, _read: &mut [u8], _write: &[u8]) -> Result<(), Self::Error> {
-        panic!("Not supported")
+        Err(FtdiSpiError::NotSupported("transfer"))
     }
     fn transfer_in_place(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
-        panic!("Not supported")
+        Err(FtdiSpiError::NotSupported("transfer_in_place"))
     }
 }

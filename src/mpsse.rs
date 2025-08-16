@@ -1,32 +1,6 @@
 use crate::{
-    ftdaye::{ChipType, FtdiContext, FtdiError, Interface},
-    mpsse_cmd::MpsseCmdBuilder,
+    ChipType, FtdiError, Interface, Pin, PinUse, ftdaye::FtdiContext, mpsse_cmd::MpsseCmdBuilder,
 };
-/// Pin number
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Pin {
-    Lower(usize),
-    Upper(usize),
-}
-impl Pin {
-    pub(crate) fn mask(&self) -> u8 {
-        match self {
-            Pin::Lower(idx) => 1 << idx,
-            Pin::Upper(idx) => 1 << idx,
-        }
-    }
-}
-/// State tracker for each pin on the FTDI chip.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum PinUse {
-    Output,
-    Input,
-    I2c,
-    Spi,
-    Jtag,
-    Swd,
-}
-
 /// Manages a bank of 8 GPIO pins
 /// Tracks direction, current value, and allocated protocol usage
 #[derive(Debug, Default)]
@@ -163,43 +137,54 @@ impl FtdiMpsse {
         self.ft.write_read(write, read)
     }
     /// Allocate a pin for a specific use.
-    pub(crate) fn alloc_pin(&mut self, pin: Pin, purpose: PinUse) {
+    pub(crate) fn alloc_pin(&mut self, pin: Pin, purpose: PinUse) -> Result<(), FtdiError> {
         if !self.chip_type.mpsse_list().contains(&self.interface)
             && (purpose != PinUse::Input || purpose != PinUse::Output)
         {
-            panic!(
-                "Interface::{:?} only can be used as Input or Output.",
-                self.interface
-            );
+            return Err(FtdiError::IncorrectUsage {
+                chip: self.chip_type,
+                interface: self.interface,
+                usage: purpose,
+            });
         }
         let (byte, idx) = match pin {
-            Pin::Lower(idx) => (&mut self.lower, idx),
+            Pin::Lower(idx) => {
+                if idx >= 8 {
+                    return Err(FtdiError::PinNotVaild {
+                        chip: self.chip_type,
+                        interface: self.interface,
+                        pin,
+                    });
+                };
+                (&mut self.lower, idx)
+            }
             Pin::Upper(idx) => {
-                assert!(
-                    idx < self.chip_type.upper_pins(),
-                    "{:?} Interface::{:?} do not has {:?}",
-                    self.chip_type,
-                    self.interface,
-                    pin
-                );
+                if idx >= self.chip_type.upper_pins() {
+                    return Err(FtdiError::PinNotVaild {
+                        chip: self.chip_type,
+                        interface: self.interface,
+                        pin,
+                    });
+                }
                 (&mut self.upper, idx)
             }
         };
-        assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
         if let Some(current) = byte.pins[idx] {
-            panic!(
-                "Unable to allocate pin {pin:?} for {purpose:?}, pin is already allocated for {current:?}"
-            );
+            return Err(FtdiError::PinInUsed {
+                pin,
+                purpose,
+                current,
+            });
         } else {
             byte.pins[idx] = Some(purpose)
         }
+        Ok(())
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn free_pin(&mut self, pin: Pin) {
         match pin {
             Pin::Lower(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
-                assert!(self.lower.pins[idx].is_some(), "{pin:?} is not used");
                 self.lower.pins[idx] = None;
                 self.lower.value &= !(1 << idx); // set value to low
                 self.lower.direction &= !(1 << idx); // set direction to input
@@ -209,7 +194,6 @@ impl FtdiMpsse {
             }
             Pin::Upper(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
-                assert!(self.upper.pins[idx].is_some(), "{pin:?} is not used");
                 self.upper.pins[idx] = None;
                 self.upper.value &= !(1 << idx); // set value to low
                 self.upper.direction &= !(1 << idx); // set direction to input

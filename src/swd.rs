@@ -1,10 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use self::cmd::SwdCmdBuilder;
-use crate::{
-    ftdaye::FtdiError,
-    mpsse::{FtdiMpsse, Pin, PinUse},
-};
+use crate::{FtdiError, Pin, PinUse, mpsse::FtdiMpsse};
 
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiSwdError {
@@ -71,9 +68,9 @@ impl FtdiSwd {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSwdError> {
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Swd);
-            lock.alloc_pin(Pin::Lower(1), PinUse::Swd);
-            lock.alloc_pin(Pin::Lower(2), PinUse::Swd);
+            lock.alloc_pin(Pin::Lower(0), PinUse::Swd)?;
+            lock.alloc_pin(Pin::Lower(1), PinUse::Swd)?;
+            lock.alloc_pin(Pin::Lower(2), PinUse::Swd)?;
             // clear direction and value of first 3 pins
             // pins default input and value 0
             // AD0: SCK
@@ -85,12 +82,12 @@ impl FtdiSwd {
             direction_pin: None,
         })
     }
-    pub fn set_direction_pin(&mut self, pin: Pin) {
+    pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiSwdError> {
         let mut lock = self.mtx.lock().unwrap();
         if let Some(pin) = self.direction_pin {
             lock.free_pin(pin);
         }
-        lock.alloc_pin(pin, PinUse::Swd);
+        lock.alloc_pin(pin, PinUse::Swd)?;
         match pin {
             Pin::Lower(idx) => {
                 lock.lower.direction |= 1 << idx;
@@ -99,7 +96,8 @@ impl FtdiSwd {
                 lock.upper.direction |= 1 << idx;
             }
         }
-        self.direction_pin = Some(pin)
+        self.direction_pin = Some(pin);
+        Ok(())
     }
     /// Send SWD activation sequence
     /// Sequence: >50 ones + 0x79E7 (MSB first) + >50 ones
@@ -217,10 +215,7 @@ mod cmd {
     const TCK_INIT_VALUE: bool = false;
     const IS_LSB: bool = true;
 
-    use crate::{
-        mpsse::{FtdiMpsse, Pin},
-        mpsse_cmd::MpsseCmdBuilder,
-    };
+    use crate::{Pin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
     use std::{
         ops::{Deref, DerefMut},
         sync::MutexGuard,
