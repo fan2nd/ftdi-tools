@@ -307,7 +307,7 @@ impl SpiDevice<u8> for FtdiSpiDevice {
             lock.lower.value & !Pin::Lower(3).mask(),
             lock.lower.direction,
         );
-        operations.iter_mut().for_each(|op| match op {
+        operations.iter().for_each(|op| match op {
             Operation::Read(read) => {
                 cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, read.len());
             }
