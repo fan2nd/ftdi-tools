@@ -73,32 +73,6 @@ impl FtdiOutputPin {
         }
         Ok(this)
     }
-
-    pub(crate) fn set(&self, state: bool) -> Result<(), FtdiError> {
-        let mut lock = self.mtx.lock().unwrap();
-        let mut cmd = MpsseCmdBuilder::new();
-        match *self.pin {
-            Pin::Lower(_) => {
-                if state {
-                    lock.lower.value |= self.pin.mask();
-                } else {
-                    lock.lower.value &= !self.pin.mask();
-                }
-                cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            }
-            Pin::Upper(_) => {
-                if state {
-                    lock.upper.value |= self.pin.mask();
-                } else {
-                    lock.upper.value &= !self.pin.mask();
-                }
-                cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
-            }
-        }
-        lock.exec(cmd)?;
-
-        Ok(())
-    }
 }
 
 impl eh1::digital::Error for FtdiError {
@@ -113,18 +87,45 @@ impl eh1::digital::ErrorType for FtdiOutputPin {
 
 impl eh1::digital::OutputPin for FtdiOutputPin {
     fn set_low(&mut self) -> Result<(), FtdiError> {
-        self.set(false)
+        let mut lock = self.mtx.lock().unwrap();
+        let mut cmd = MpsseCmdBuilder::new();
+        match *self.pin {
+            Pin::Lower(_) => {
+                lock.lower.value &= !self.pin.mask();
+                cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+            }
+            Pin::Upper(_) => {
+                lock.upper.value &= !self.pin.mask();
+                cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
+            }
+        }
+        lock.exec(cmd)?;
+
+        Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), FtdiError> {
-        self.set(true)
+        let mut lock = self.mtx.lock().unwrap();
+        let mut cmd = MpsseCmdBuilder::new();
+        match *self.pin {
+            Pin::Lower(_) => {
+                lock.lower.value |= self.pin.mask();
+                cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+            }
+            Pin::Upper(_) => {
+                lock.upper.value |= self.pin.mask();
+                cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
+            }
+        }
+        lock.exec(cmd)?;
+
+        Ok(())
     }
 }
 
 /// FTDI GPIO input pin abstraction
 ///
-/// Represents a single GPIO pin configured as input. Provides methods to read
-/// pin state and ensures proper cleanup through Drop implementation.
+/// Represents a single GPIO pin configured as input.
 pub struct FtdiInputPin {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,

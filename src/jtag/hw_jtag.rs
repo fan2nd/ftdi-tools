@@ -4,6 +4,7 @@ use crate::{
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
+use eh1::digital::OutputPin;
 use std::sync::{Arc, Mutex};
 
 const TCK_MASK: u8 = Pin::Lower(0).mask();
@@ -123,14 +124,14 @@ impl FtdiJtag {
         tdo: Pin,
         tms: Pin,
     ) -> Result<(), FtdiError> {
-        let tck = FtdiOutputPin::new(self.mtx.clone(), tck)?;
-        let tdi = FtdiOutputPin::new(self.mtx.clone(), tdi)?;
-        let tdo = FtdiOutputPin::new(self.mtx.clone(), tdo)?;
-        let tms = FtdiOutputPin::new(self.mtx.clone(), tms)?;
-        tck.set(true)?;
-        tdi.set(true)?;
-        tdo.set(false)?;
-        tms.set(true)?;
+        let mut tck = FtdiOutputPin::new(self.mtx.clone(), tck)?;
+        let mut tdi = FtdiOutputPin::new(self.mtx.clone(), tdi)?;
+        let mut tdo = FtdiOutputPin::new(self.mtx.clone(), tdo)?;
+        let mut tms = FtdiOutputPin::new(self.mtx.clone(), tms)?;
+        tck.set_high()?;
+        tdi.set_high()?;
+        tdo.set_low()?;
+        tms.set_high()?;
         self.direction = Some([tck, tdi, tdo, tms]);
         Ok(())
     }
