@@ -33,7 +33,7 @@ impl Drop for FtdiI2c {
         let mut cmd = MpsseCmdBuilder::new();
         cmd.enable_3phase_data_clocking(false);
         let mut lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut []).unwrap();
+        lock.exec(cmd).unwrap();
         lock.free_pin(Pin::Lower(0));
         lock.free_pin(Pin::Lower(1));
         lock.free_pin(Pin::Lower(2));
@@ -59,7 +59,7 @@ impl FtdiI2c {
             // AD2: SDA (master in)
             let mut cmd = MpsseCmdBuilder::new();
             cmd.enable_3phase_data_clocking(true);
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
         }
         let this = FtdiI2c {
             mtx,
@@ -113,9 +113,9 @@ impl FtdiI2c {
     pub fn scan(&mut self) -> Vec<u8> {
         let mut addr_set = Vec::new();
         for addr in 0..128 {
-            let result1 = self.transaction(addr, &mut [Operation::Write(&[])]);
-            let result2 = self.transaction(addr, &mut [Operation::Read(&mut [])]);
-            if result1.is_ok() || result2.is_ok() {
+            let write_response = self.transaction(addr, &mut [Operation::Write(&[])]);
+            let read_response = self.transaction(addr, &mut [Operation::Read(&mut [])]);
+            if write_response.is_ok() || read_response.is_ok() {
                 addr_set.push(addr);
             }
         }
@@ -134,7 +134,7 @@ impl FtdiI2c {
         // start
         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
         cmd.start(self.start_stop_cmds);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
 
         let mut prev_op_was_a_read: bool = false;
         for (op_idx, operation) in operations.iter_mut().enumerate() {
@@ -146,12 +146,11 @@ impl FtdiI2c {
                             cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, true); // (Address+Read)+Ack
-                        let mut response = [0];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
-                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
@@ -164,7 +163,8 @@ impl FtdiI2c {
                             cmd.i2c_read(true); // MAK: Master Ack
                         }
                     }
-                    lock.write_read(cmd.as_slice(), buffer)?;
+                    let response = lock.exec(cmd)?;
+                    buffer.copy_from_slice(&response);
 
                     prev_op_was_a_read = true;
                 }
@@ -175,26 +175,24 @@ impl FtdiI2c {
                             cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, false); // (Address+Write)+Ack
-                        let mut response = [0u8];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
-                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
                     for idx in 0..bytes.len() {
                         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                         cmd.i2c_write(bytes[idx]);
-                        let mut response = [0u8];
-                        lock.write_read(cmd.as_slice(), &mut response)?;
+                        let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK
                             && idx != bytes.len() - 1
                         {
                             let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
                             cmd.end(self.start_stop_cmds);
-                            lock.write_read(cmd.as_slice(), &mut [])?;
+                            lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
                         }
                     }
@@ -206,7 +204,7 @@ impl FtdiI2c {
         // stop
         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
         cmd.end(self.start_stop_cmds);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
 
         Ok(())
     }
@@ -222,7 +220,6 @@ impl FtdiI2c {
         // start
         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
         cmd.start(self.start_stop_cmds);
-        lock.write_read(cmd.as_slice(), &mut [])?;
 
         let mut prev_op_was_a_read: bool = false;
         for (idx, operation) in operations.iter_mut().enumerate() {
@@ -258,8 +255,7 @@ impl FtdiI2c {
             }
         }
         cmd.end(self.start_stop_cmds);
-        let mut response = vec![0; cmd.read_len()];
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
 
         // parse response
         let mut prev_op_was_a_read: bool = false;
@@ -367,6 +363,11 @@ mod cmd {
     impl<'a> DerefMut for I2cCmdBuilder<'a> {
         fn deref_mut(&mut self) -> &mut Self::Target {
             &mut self.cmd
+        }
+    }
+    impl<'a> From<I2cCmdBuilder<'a>> for MpsseCmdBuilder {
+        fn from(value: I2cCmdBuilder<'a>) -> Self {
+            value.cmd
         }
     }
     impl<'a> I2cCmdBuilder<'a> {

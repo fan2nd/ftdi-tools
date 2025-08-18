@@ -109,7 +109,7 @@ impl FtdiSwd {
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_enable();
 
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
     // Build SWD request packet (lsb 8 bits)
@@ -148,18 +148,17 @@ impl FtdiSwd {
     pub fn read(&self, addr: SwdAddr) -> Result<u32, FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(true, addr);
-        let mut response = [0u8];
         // Send request (8 bits)
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_send_request(request).trn().swd_read_response();
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
 
         // Read ACK (3 bits)
         let ack = response[0] >> 5;
         if ack != Self::REPONSE_SUCCESS {
             let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
             cmd.trn();
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
             return match ack {
                 Self::REPONSE_WAIT => Err(FtdiSwdError::AckWait),
                 Self::REPONSE_FAILED => Err(FtdiSwdError::AckFailed),
@@ -168,10 +167,10 @@ impl FtdiSwd {
         }
 
         // Read data (32 bits) + parity (1 bit) = 33 bits
-        let mut response = [0u8; 5]; // 33 bits = 5 bytes
+        // 33 bits = 5 bytes
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_read_data().trn();
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
 
         // Parse the data (LSB first)
         let value = u32::from_le_bytes([response[0], response[1], response[2], response[3]]);
@@ -187,13 +186,12 @@ impl FtdiSwd {
     pub fn write(&self, addr: SwdAddr, value: u32) -> Result<(), FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(false, addr);
-        let mut response = [0u8];
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_send_request(request)
             .trn()
             .swd_read_response()
             .trn();
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
 
         // Read ACK (3 bits)
         let ack = response[0] >> 5;
@@ -207,7 +205,7 @@ impl FtdiSwd {
         // Send data (33 bits)
         let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
         cmd.swd_write_data(value);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
 }
@@ -237,6 +235,11 @@ mod cmd {
     impl<'a> DerefMut for SwdCmdBuilder<'a> {
         fn deref_mut(&mut self) -> &mut Self::Target {
             &mut self.cmd
+        }
+    }
+    impl<'a> From<SwdCmdBuilder<'a>> for MpsseCmdBuilder {
+        fn from(value: SwdCmdBuilder<'a>) -> Self {
+            value.cmd
         }
     }
     impl<'a> SwdCmdBuilder<'a> {

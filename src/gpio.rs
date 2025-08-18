@@ -38,7 +38,7 @@ impl FtdiOutputPin {
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
         }
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         drop(lock);
         Ok(FtdiOutputPin { mtx, pin })
     }
@@ -64,7 +64,7 @@ impl FtdiOutputPin {
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
         }
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
 
         Ok(())
     }
@@ -123,7 +123,7 @@ impl FtdiInputPin {
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
         }
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         drop(lock);
         Ok(FtdiInputPin { mtx, pin })
     }
@@ -131,13 +131,12 @@ impl FtdiInputPin {
     pub(crate) fn get(&self) -> Result<bool, FtdiError> {
         let lock = self.mtx.lock().unwrap();
 
-        let mut response = [0u8];
         let mut cmd = MpsseCmdBuilder::new();
         match self.pin {
             Pin::Lower(_) => cmd.gpio_lower(),
             Pin::Upper(_) => cmd.gpio_upper(),
         };
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
 
         Ok(response[0] & self.pin.mask() != 0)
     }

@@ -138,13 +138,16 @@ impl FtdiMpsse {
 
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_clock((divisor - 1) as u16, clk_div_by5); // [`EnableClockDivideBy5`] is useless because 458hz is already slow.
-        self.write_read(cmd.as_slice(), &mut [])?;
+        self.exec(cmd)?;
         log::info!("Frequency set to {}Hz", max_frequency / divisor);
         Ok(max_frequency / divisor)
     }
     /// Write mpsse command and read response
-    pub(crate) fn write_read(&self, write: &[u8], read: &mut [u8]) -> Result<(), FtdiError> {
-        self.ft.write_read(write, read)
+    pub(crate) fn exec(&self, cmd: impl Into<MpsseCmdBuilder>) -> Result<Vec<u8>, FtdiError> {
+        let mut cmd: MpsseCmdBuilder = cmd.into();
+        let mut response = vec![0; cmd.read_len()];
+        self.ft.write_read(cmd.as_slice(), &mut response)?;
+        Ok(response)
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn alloc_pin(&mut self, pin: Pin, purpose: PinUse) -> Result<(), FtdiError> {
@@ -200,7 +203,7 @@ impl FtdiMpsse {
                 self.lower.direction &= !pin.mask(); // set direction to input
                 let mut cmd = MpsseCmdBuilder::new();
                 cmd.set_gpio_lower(self.lower.value, self.lower.direction);
-                self.write_read(cmd.as_slice(), &mut []).unwrap();
+                self.exec(cmd).unwrap();
             }
             Pin::Upper(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
@@ -209,7 +212,7 @@ impl FtdiMpsse {
                 self.upper.direction &= !pin.mask(); // set direction to input
                 let mut cmd = MpsseCmdBuilder::new();
                 cmd.set_gpio_upper(self.upper.value, self.upper.direction);
-                self.write_read(cmd.as_slice(), &mut []).unwrap();
+                self.exec(cmd).unwrap();
             }
         };
     }

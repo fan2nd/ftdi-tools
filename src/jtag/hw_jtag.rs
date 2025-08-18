@@ -72,7 +72,7 @@ impl FtdiJtag {
             // Reference: https://ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
         }
         Ok(Self {
             mtx,
@@ -101,7 +101,7 @@ impl FtdiJtag {
             lock.free_pin(Pin::Lower(7));
         }
         cmd.enable_adaptive_clocking(state);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         self.adaptive_clocking = state;
         Ok(())
     }
@@ -137,7 +137,7 @@ impl FtdiJtag {
         let mut cmd = JtagCmdBuilder::new();
         cmd.jtag_any2idle();
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
     pub fn scan_with(&mut self, tdi: bool) -> Result<Vec<u32>, FtdiError> {
@@ -145,7 +145,7 @@ impl FtdiJtag {
         let mut cmd = JtagCmdBuilder::new();
         cmd.jtag_any2idle().jtag_idle2dr();
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         let tdi = if tdi { vec![0xff; 4] } else { vec![0; 4] };
         // 移入0并读取TDO，持续直到检测到连续32个0
         let mut idcodes = Vec::new();
@@ -156,8 +156,7 @@ impl FtdiJtag {
         'outer: loop {
             let mut cmd = MpsseCmdBuilder::new();
             cmd.clock_bytes(TCK_INIT_VALUE, IS_LSB, &tdi);
-            let mut response = [0u8; 4];
-            lock.write_read(cmd.as_slice(), &mut response)?;
+            let response = lock.exec(cmd)?;
             let tdos: Vec<_> = response
                 .iter()
                 .flat_map(|&byte| (0..8).map(move |i| (byte >> i) & 1 == 1))
@@ -204,7 +203,7 @@ impl FtdiJtag {
             .jtag_dr_exit2idle()
             .jtag_idle_cycle();
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
     pub fn read(&self, ir: &[u8], irlen: usize, drlen: usize) -> Result<Vec<u8>, FtdiError> {
@@ -218,8 +217,7 @@ impl FtdiJtag {
             .jtag_dr_exit2idle()
             .jtag_idle_cycle();
         let lock = self.mtx.lock().unwrap();
-        let mut response = vec![0; cmd.read_len()];
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let mut response = lock.exec(cmd)?;
         let len = JtagCmdBuilder::jtag_parse_single_shift(&mut response, drlen);
 
         if response.len() > len {
@@ -244,8 +242,7 @@ impl FtdiJtag {
             .jtag_dr_exit2idle()
             .jtag_idle_cycle();
         let lock = self.mtx.lock().unwrap();
-        let mut response = vec![0; cmd.read_len()];
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let mut response = lock.exec(cmd)?;
         let len = JtagCmdBuilder::jtag_parse_single_shift(&mut response, drlen);
 
         if response.len() > len {
@@ -265,6 +262,11 @@ impl Deref for JtagCmdBuilder {
 impl DerefMut for JtagCmdBuilder {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+impl From<JtagCmdBuilder> for MpsseCmdBuilder {
+    fn from(value: JtagCmdBuilder) -> Self {
+        value.0
     }
 }
 impl JtagCmdBuilder {

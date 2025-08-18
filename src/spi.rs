@@ -68,7 +68,7 @@ impl FtdiSpi {
 
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
         }
         // default msb mode0
         Ok(Self {
@@ -97,7 +97,7 @@ impl FtdiSpi {
         self.is_lsb = is_lsb;
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
 }
@@ -112,7 +112,8 @@ impl SpiBus<u8> for FtdiSpi {
         cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, words.len());
 
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), words)?;
+        let response = lock.exec(cmd)?;
+        words.copy_from_slice(&response);
 
         Ok(())
     }
@@ -122,7 +123,7 @@ impl SpiBus<u8> for FtdiSpi {
         cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, words);
 
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
 
         Ok(())
     }
@@ -137,7 +138,8 @@ impl SpiBus<u8> for FtdiSpi {
 
         let lock = self.mtx.lock().unwrap();
 
-        lock.write_read(cmd.as_slice(), words)?;
+        let response = lock.exec(cmd)?;
+        words.copy_from_slice(&response);
 
         Ok(())
     }
@@ -147,7 +149,8 @@ impl SpiBus<u8> for FtdiSpi {
         cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
 
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), read)?;
+        let response = lock.exec(cmd)?;
+        read.copy_from_slice(&response);
 
         Ok(())
     }
@@ -191,7 +194,7 @@ impl FtdiSpiHalfduplex {
 
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
         }
         Ok(Self {
             mtx,
@@ -219,7 +222,7 @@ impl FtdiSpiHalfduplex {
         self.is_lsb = is_lsb;
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
         Ok(())
     }
     /// set spi bps
@@ -240,7 +243,8 @@ impl SpiBus for FtdiSpiHalfduplex {
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction & (!MOSI_MASK)); // set tdi to input
         cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, words.len());
 
-        lock.write_read(cmd.as_slice(), words)?;
+        let response = lock.exec(cmd)?;
+        words.copy_from_slice(&response);
 
         Ok(())
     }
@@ -250,7 +254,7 @@ impl SpiBus for FtdiSpiHalfduplex {
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
         cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, words);
 
-        lock.write_read(cmd.as_slice(), &mut [])?;
+        lock.exec(cmd)?;
 
         Ok(())
     }
@@ -297,7 +301,7 @@ impl FtdiSpiDevice {
             lock.lower.value |= CS_MASK;
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.write_read(cmd.as_slice(), &mut [])?;
+            lock.exec(cmd)?;
         }
         // default msb mode0
         Ok(Self {
@@ -339,21 +343,20 @@ impl SpiDevice<u8> for FtdiSpiDevice {
             Operation::DelayNs(_) => (),
         });
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-        let mut result = vec![0; cmd.read_len()];
-        lock.write_read(cmd.as_slice(), &mut result)?;
+        let response = lock.exec(cmd)?;
         let mut len = 0;
         operations.iter_mut().for_each(|op| {
             len += match op {
                 Operation::Read(x) => {
-                    x.copy_from_slice(&result[len..x.len()]);
+                    x.copy_from_slice(&response[len..x.len()]);
                     x.len()
                 }
                 Operation::Transfer(x, _) => {
-                    x.copy_from_slice(&result[len..x.len()]);
+                    x.copy_from_slice(&response[len..x.len()]);
                     x.len()
                 }
                 Operation::TransferInPlace(x) => {
-                    x.copy_from_slice(&result[len..x.len()]);
+                    x.copy_from_slice(&response[len..x.len()]);
                     x.len()
                 }
                 _ => 0,

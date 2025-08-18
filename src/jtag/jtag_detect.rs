@@ -45,7 +45,6 @@ impl JtagDetectTdo {
     }
     fn shift_dr(&self, len: usize) -> Result<Vec<u8>, FtdiError> {
         let direction = 1 << self.tck | 1 << self.tms;
-        let mut response = vec![0; len];
         let mut cmd = MpsseCmdBuilder::new();
         for _ in 0..len {
             cmd.set_gpio_lower(0, direction) // TCK0,TMS0,
@@ -53,7 +52,7 @@ impl JtagDetectTdo {
                 .gpio_lower();
         }
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
         Ok(response)
     }
     /// Scans JTAG chain to identify connected devices through TDO pins
@@ -162,7 +161,6 @@ impl JtagDetectTdi {
     fn shift_dr(&self, tdi_value: bool, len: usize) -> Result<Vec<bool>, FtdiError> {
         let direction = !(1 << self.tdo); // all output except tdo
         let tdi_mask = if tdi_value { 1 << self.tdi } else { 0 };
-        let mut response = vec![0; len];
         let mut cmd = MpsseCmdBuilder::new();
         for _ in 0..len {
             cmd.set_gpio_lower(tdi_mask, direction) // TCK0,TMS0,
@@ -170,7 +168,7 @@ impl JtagDetectTdi {
                 .gpio_lower();
         }
         let lock = self.mtx.lock().unwrap();
-        lock.write_read(cmd.as_slice(), &mut response)?;
+        let response = lock.exec(cmd)?;
         Ok(response
             .into_iter()
             .map(|x| x & (1 << self.tdo) != 0)
@@ -261,6 +259,6 @@ fn reset2dr(lock: MutexGuard<FtdiMpsse>, tck: usize, tms: usize) -> Result<(), F
         .set_gpio_lower(tck_mask, direction) // TCK to high
         .set_gpio_lower(0, direction) // TCK to low
         .set_gpio_lower(tck_mask, direction); // TCK to high
-    lock.write_read(cmd.as_slice(), &mut [])?;
+    lock.exec(cmd)?;
     Ok(())
 }
