@@ -117,7 +117,8 @@ impl FtdiMpsse {
     ///
     /// # Notes
     /// Actual frequency may differ from target due to hardware limitations
-    /// Supports frequencies from 458Hz to chip-specific maximum (typically 30MHz)
+    /// FT2232D Supports frequencies from 92Hz to 6MHz.
+    /// FTx232H Supports frequencies from 92Hz to 30MHz but in this lib only 458Hz to 30MHz has been supported.
     pub fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
         let (max_frequency, clk_div_by5) = self.chip_type.max_frequecny();
         let min_frequency = max_frequency / (u16::MAX as usize + 1) + 1;
@@ -137,7 +138,7 @@ impl FtdiMpsse {
         };
 
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_clock((divisor - 1) as u16, clk_div_by5); // [`EnableClockDivideBy5`] is useless because 458hz is already slow.
+        cmd.set_clock((divisor - 1) as u16, clk_div_by5);
         self.exec(cmd)?;
         log::info!("Frequency set to {}Hz", max_frequency / divisor);
         Ok(max_frequency / divisor)
