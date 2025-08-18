@@ -18,20 +18,17 @@ fn main() -> anyhow::Result<()> {
     assert!(!devices.is_empty(), "Not found Ftdi devices");
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0])?;
     let mtx = Arc::new(Mutex::new(mpsse));
-    let mut notdi = Vec::new();
+    let mut notdi: Vec<_> = Vec::new();
     // find tdo
-    for couple in (0..8).into_iter().permutations(2) {
+    for couple in (0..8).permutations(2) {
         let tck = couple[0];
         let tms = couple[1];
         let jtag = JtagDetectTdo::new(mtx.clone(), tck, tms)?;
         // you can add code here to control level translation chip
         // tck and tms output, other input
-        let tdo_pins = jtag.scan()?;
-        for tdo in tdo_pins.into_iter() {
-            if let Pin::Lower(tdo_idx) = tdo {
-                notdi.push((tck, tms, tdo_idx));
-            }
-        }
+        jtag.scan()?
+            .into_iter()
+            .for_each(|tdo| notdi.push((tck, tms, tdo)))
     }
     // find tdi
     for (tck, tms, tdo) in notdi {

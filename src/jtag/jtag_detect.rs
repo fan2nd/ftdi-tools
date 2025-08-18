@@ -71,7 +71,7 @@ impl JtagDetectTdo {
     /// 3. Analyzes TDO responses from all non-TCK/TMS pins
     /// 4. Detects IDCODEs by accumulating 32-bit sequences
     /// 5. Terminates on 32 consecutive bypass bits or invalid IDCODE
-    pub fn scan(&self) -> Result<Vec<Pin>, FtdiError> {
+    pub fn scan(&self) -> Result<Vec<usize>, FtdiError> {
         const ID_LEN: usize = 32;
         let mut tdo_pins = Vec::new();
         let lock = self.mtx.lock().unwrap();
@@ -105,7 +105,7 @@ impl JtagDetectTdo {
                 if bit_count == ID_LEN {
                     // Terminate on invalid IDCODE (all 1s)
                     if current_id != u32::MAX {
-                        tdo_pins.push(Pin::Lower(i));
+                        tdo_pins.push(i);
                     }
                     break;
                 }
