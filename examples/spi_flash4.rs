@@ -1,19 +1,19 @@
-use std::{
-    cell::RefCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
 use eh1::spi::SpiDevice;
-use embedded_hal_bus::spi::RefCellDevice;
-use ftdi_tools::{
-    Interface, Pin, gpio::FtdiOutputPin, list_all_device, mpsse::FtdiMpsse, spi::FtdiSpi,
-};
+use ftdi_tools::{Interface, list_all_device, mpsse::FtdiMpsse, spi::FtdiSpiDevice};
 use spi_flash::{Error, Flash, FlashAccess};
 
 struct FlashDevice<T>(T);
 impl<T: SpiDevice> FlashAccess for FlashDevice<T> {
     type Error = Error;
+    fn write(&mut self, data: &[u8]) -> core::result::Result<(), Self::Error> {
+        self.0
+            .write(data)
+            .map_err(|_| Error::Access(anyhow!("fuck rust error")))?;
+        Ok(())
+    }
     fn exchange(&mut self, data: &[u8]) -> core::result::Result<Vec<u8>, Self::Error> {
         let mut result = vec![0; data.len()];
         self.0
@@ -29,9 +29,8 @@ fn main() -> anyhow::Result<()> {
     assert!(!devices.is_empty(), "Not found Ftdi devices");
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, Interface::A)?;
     let mtx = Arc::new(Mutex::new(mpsse));
-    let spi = RefCell::new(FtdiSpi::new(mtx.clone())?);
-    let gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
-    let mut flash_device = FlashDevice(RefCellDevice::new_no_delay(&spi, gpio)?);
+    let spidevice = FtdiSpiDevice::new(mtx)?;
+    let mut flash_device = FlashDevice(spidevice);
     let mut flash = Flash::new(&mut flash_device);
     let id = flash.read_id()?;
     println!("{id}");

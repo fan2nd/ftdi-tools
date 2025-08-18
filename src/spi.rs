@@ -3,7 +3,7 @@ use crate::{
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
-use eh1::spi::{Error, ErrorKind, ErrorType, SpiBus};
+use eh1::spi::{Error, ErrorKind, ErrorType, MODE_0, MODE_2, Mode, Operation, SpiBus, SpiDevice};
 use std::sync::{Arc, Mutex};
 
 const SCK_MASK: u8 = 1 << 0;
@@ -16,19 +16,18 @@ const MISO_MASK: u8 = 1 << 2;
 // TDO(AD2) can only can sample on first edge.
 // according to AN108-2.2.
 // https://ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
-#[derive(Debug, Clone, Copy)]
-pub enum SpiMode {
-    MsbMode0,
-    LsbMode0,
-    MsbMode2,
-    LsbMode2,
-}
+
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiSpiError {
     #[error(transparent)]
     FtdiInner(#[from] FtdiError),
-    #[error("Function {0} not supported which definded in embedded-hal::spi::SpiBus.")]
+    #[error("embedded-hal::spi::SpiBus {0} is not supported.")]
     NotSupported(&'static str),
+}
+impl Error for FtdiSpiError {
+    fn kind(&self) -> ErrorKind {
+        ErrorKind::Other
+    }
 }
 /// FTDI SPI bus.
 ///
@@ -78,29 +77,27 @@ impl FtdiSpi {
         })
     }
     /// set spi mode and bitorder
-    pub fn set_mode(&mut self, mode: SpiMode) -> Result<(), FtdiError> {
+    pub fn set_mode(&mut self, mode: Mode, is_lsb: bool) -> Result<(), FtdiSpiError> {
         let mut lock = self.mtx.lock().unwrap();
         // set SCK polarity
         match mode {
-            SpiMode::MsbMode0 | SpiMode::LsbMode0 => lock.lower.value &= !(0x01), // set SCK(AD0) to 0
-            SpiMode::MsbMode2 | SpiMode::LsbMode2 => lock.lower.value |= 0x01, // set SCK(AD0) to 1
+            MODE_0 => {
+                lock.lower.value &= !(0x01); // set SCK(AD0) to 0
+                self.tck_init_value = false;
+            }
+            MODE_2 => {
+                lock.lower.value |= 0x01; // set SCK(AD0) to 1
+                self.tck_init_value = true;
+            }
+            _ => {
+                return Err(FtdiSpiError::NotSupported("MODE_1&MODE_3"));
+            }
         }
+        self.is_lsb = is_lsb;
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
         lock.write_read(cmd.as_slice(), &mut [])?;
-        (self.tck_init_value, self.is_lsb) = match mode {
-            SpiMode::MsbMode0 => (false, false),
-            SpiMode::LsbMode0 => (false, true),
-            SpiMode::MsbMode2 => (true, false),
-            SpiMode::LsbMode2 => (true, true),
-        };
         Ok(())
-    }
-}
-
-impl Error for FtdiSpiError {
-    fn kind(&self) -> ErrorKind {
-        ErrorKind::Other
     }
 }
 
@@ -180,7 +177,7 @@ impl Drop for FtdiSpiHalfduplex {
 }
 
 impl FtdiSpiHalfduplex {
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
         {
             let mut lock = mtx.lock().unwrap();
             lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
@@ -202,28 +199,32 @@ impl FtdiSpiHalfduplex {
         })
     }
     /// set spi mode and bitorder
-    pub fn set_mode(&mut self, mode: SpiMode) -> Result<(), FtdiError> {
+    pub fn set_mode(&mut self, mode: Mode, is_lsb: bool) -> Result<(), FtdiSpiError> {
         let mut lock = self.mtx.lock().unwrap();
         // set SCK polarity
         match mode {
-            SpiMode::MsbMode0 | SpiMode::LsbMode0 => lock.lower.value &= !(0x01), // set SCK(AD0) to 0
-            SpiMode::MsbMode2 | SpiMode::LsbMode2 => lock.lower.value |= 0x01, // set SCK(AD0) to 1
+            MODE_0 => {
+                lock.lower.value &= !(0x01); // set SCK(AD0) to 0
+                self.tck_init_value = false;
+            }
+            MODE_2 => {
+                lock.lower.value |= 0x01; // set SCK(AD0) to 1
+                self.tck_init_value = true;
+            }
+            _ => {
+                return Err(FtdiSpiError::NotSupported("MODE_1&MODE_3"));
+            }
         }
+        self.is_lsb = is_lsb;
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
         lock.write_read(cmd.as_slice(), &mut [])?;
-        (self.tck_init_value, self.is_lsb) = match mode {
-            SpiMode::MsbMode0 => (false, false),
-            SpiMode::LsbMode0 => (false, true),
-            SpiMode::MsbMode2 => (true, false),
-            SpiMode::LsbMode2 => (true, true),
-        };
         Ok(())
     }
     /// set spi bps
-    pub fn set_frequency(&mut self, bps: usize) -> Result<usize, FtdiError> {
+    pub fn set_frequency(&mut self, bps: usize) -> Result<usize, FtdiSpiError> {
         let lock = self.mtx.lock().unwrap();
-        lock.set_frequency(bps)
+        Ok(lock.set_frequency(bps)?)
     }
 }
 
@@ -260,5 +261,100 @@ impl SpiBus for FtdiSpiHalfduplex {
     }
     fn transfer_in_place(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
         Err(FtdiSpiError::NotSupported("transfer_in_place"))
+    }
+}
+pub struct FtdiSpiDevice {
+    /// Thread-safe handle to FTDI MPSSE controller
+    mtx: Arc<Mutex<FtdiMpsse>>,
+    /// Initial value of SCK line (clock polarity) - determines idle state
+    tck_init_value: bool,
+    /// Whether data is transferred least significant bit (LSB) first
+    is_lsb: bool,
+}
+
+impl Drop for FtdiSpiDevice {
+    fn drop(&mut self) {
+        let mut lock = self.mtx.lock().unwrap();
+        lock.free_pin(Pin::Lower(0));
+        lock.free_pin(Pin::Lower(1));
+        lock.free_pin(Pin::Lower(2));
+        lock.free_pin(Pin::Lower(3));
+    }
+}
+
+impl FtdiSpiDevice {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
+        {
+            let mut lock = mtx.lock().unwrap();
+            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
+            lock.alloc_pin(Pin::Lower(3), PinUse::Spi)?;
+            // default MODE0, SCK(AD0) default 0
+            // set SCK(AD0) and MOSI (AD1) as output pins
+            lock.lower.direction |= SCK_MASK | MOSI_MASK | (1 << 3);
+            lock.lower.value |= 1 << 3;
+            let mut cmd = MpsseCmdBuilder::new();
+            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+            lock.write_read(cmd.as_slice(), &mut [])?;
+        }
+        // default msb mode0
+        Ok(Self {
+            mtx,
+            tck_init_value: false,
+            is_lsb: false,
+        })
+    }
+}
+
+impl ErrorType for FtdiSpiDevice {
+    type Error = FtdiSpiError;
+}
+
+impl SpiDevice<u8> for FtdiSpiDevice {
+    fn transaction(
+        &mut self,
+        operations: &mut [eh1::spi::Operation<'_, u8>],
+    ) -> Result<(), Self::Error> {
+        let lock = self.mtx.lock().unwrap();
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value & (!(1 << 3)), lock.lower.direction);
+        operations.iter().for_each(|op| match op {
+            Operation::Read(read) => {
+                cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, read.len());
+            }
+            Operation::Write(write) => {
+                cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, write);
+            }
+            Operation::Transfer(_, write) => {
+                cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
+            }
+            Operation::TransferInPlace(write) => {
+                cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
+            }
+            Operation::DelayNs(_) => (),
+        });
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        let mut result = vec![0; cmd.read_len()];
+        lock.write_read(cmd.as_slice(), &mut result)?;
+        let mut len = 0;
+        operations.iter_mut().for_each(|op| {
+            len += match op {
+                Operation::Read(x) => {
+                    x.copy_from_slice(&result[len..x.len()]);
+                    x.len()
+                }
+                Operation::Transfer(x, _) => {
+                    x.copy_from_slice(&result[len..x.len()]);
+                    x.len()
+                }
+                Operation::TransferInPlace(x) => {
+                    x.copy_from_slice(&result[len..x.len()]);
+                    x.len()
+                }
+                _ => 0,
+            }
+        });
+        Ok(())
     }
 }

@@ -4,7 +4,6 @@ use std::{
 };
 
 use ftdi_tools::{
-    Pin,
     jtag::{JtagDetectTdi, JtagDetectTdo},
     list_all_device,
     mpsse::FtdiMpsse,

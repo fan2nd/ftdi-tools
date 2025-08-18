@@ -124,9 +124,11 @@ impl FtdiMpsse {
 
         let divisor = if frequency_hz > max_frequency {
             log::warn!("frequency has out of range[{min_frequency}-{max_frequency}Hz]");
+            log::warn!("frequency set to {max_frequency}Hz]");
             1
         } else if frequency_hz < min_frequency {
             log::warn!("frequency has out of range[{min_frequency}-{max_frequency}Hz]");
+            log::warn!("frequency set to {min_frequency}Hz]");
             u16::MAX as usize + 1
         } else if max_frequency % frequency_hz != 0 {
             max_frequency / frequency_hz + 1
