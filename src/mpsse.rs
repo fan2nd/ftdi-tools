@@ -29,7 +29,7 @@ pub struct FtdiMpsse {
     /// FTDI device interface
     interface: Interface,
     /// Type of FTDI chip (e.g., FT232H, FT2232H)
-    chip_type: ChipType,
+    pub(crate) chip_type: ChipType,
     /// Lower 8 GPIO pins state tracker
     pub(crate) lower: GpioByte,
     /// Upper GPIO pins state tracker (if supported by chip)
@@ -92,10 +92,14 @@ impl FtdiMpsse {
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(0, 0) // set all pin to input and value 0;
             .set_gpio_upper(0, 0) // set all pin to input and value 0;
-            .enable_loopback(false)
-            .enable_3phase_data_clocking(false)
-            .enable_adaptive_clocking(false)
-            .set_clock(0, Some(false));
+            .enable_loopback(false);
+        if chip_type != ChipType::FT2232D {
+            cmd.set_clock(0, None);
+        } else {
+            cmd.enable_3phase_data_clocking(false)
+                .enable_adaptive_clocking(false)
+                .set_clock(0, Some(false));
+        }
         context.write_read(cmd.as_slice(), &mut [])?;
 
         Ok(Self {

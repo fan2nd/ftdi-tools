@@ -1,5 +1,5 @@
 use crate::{
-    FtdiError, Pin,
+    ChipType, FtdiError, Pin,
     gpio::FtdiOutputPin,
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
@@ -92,6 +92,9 @@ impl FtdiJtag {
             return Ok(());
         }
         let mut lock = self.mtx.lock().unwrap();
+        if lock.chip_type == ChipType::FT2232D {
+            return Ok(());
+        }
         let mut cmd = MpsseCmdBuilder::new();
         if state {
             log::info!("Use {:?} as RTCK.", Pin::Lower(7));

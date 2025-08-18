@@ -1,6 +1,6 @@
 use self::cmd::I2cCmdBuilder;
 use crate::{
-    FtdiError, Pin,
+    ChipType, FtdiError, Pin,
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
@@ -30,10 +30,12 @@ pub struct FtdiI2c {
 
 impl Drop for FtdiI2c {
     fn drop(&mut self) {
-        let mut cmd = MpsseCmdBuilder::new();
-        cmd.enable_3phase_data_clocking(false);
         let mut lock = self.mtx.lock().unwrap();
-        lock.exec(cmd).unwrap();
+        if lock.chip_type != ChipType::FT2232D {
+            let mut cmd = MpsseCmdBuilder::new();
+            cmd.enable_3phase_data_clocking(false);
+            lock.exec(cmd).unwrap();
+        }
         lock.free_pin(Pin::Lower(0));
         lock.free_pin(Pin::Lower(1));
         lock.free_pin(Pin::Lower(2));
@@ -58,8 +60,10 @@ impl FtdiI2c {
             // AD1: SDA (master out)
             // AD2: SDA (master in)
             let mut cmd = MpsseCmdBuilder::new();
-            cmd.enable_3phase_data_clocking(true);
-            lock.exec(cmd)?;
+            if lock.chip_type != ChipType::FT2232D {
+                cmd.enable_3phase_data_clocking(true);
+                lock.exec(cmd)?;
+            }
         }
         let this = FtdiI2c {
             mtx,
@@ -106,7 +110,11 @@ impl FtdiI2c {
 
     pub fn set_frequency(&self, frequency_hz: usize) -> Result<(), FtdiI2cError> {
         let lock = self.mtx.lock().unwrap();
-        lock.set_frequency(frequency_hz * 3 / 2)?;
+        if lock.chip_type == ChipType::FT2232D {
+            lock.set_frequency(frequency_hz)?;
+        } else {
+            lock.set_frequency(frequency_hz * 3 / 2)?;
+        }
         Ok(())
     }
 
