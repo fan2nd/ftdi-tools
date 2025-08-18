@@ -23,8 +23,6 @@ pub(crate) struct FtdiContext {
     handle: nusb::Interface,
     /// FTDI device interface
     interface: Interface,
-    write_ep: u8,
-    read_ep: u8,
     max_packet_size: usize,
 }
 
@@ -37,8 +35,6 @@ impl FtdiContext {
         Self {
             handle,
             interface,
-            write_ep: interface.write_ep(),
-            read_ep: interface.read_ep(),
             max_packet_size,
         }
     }
@@ -118,7 +114,7 @@ impl FtdiContext {
         let write = async {
             for batch in write.chunks(self.max_packet_size) {
                 self.handle
-                    .bulk_out(self.write_ep, Vec::from(batch))
+                    .bulk_out(self.interface.write_ep(), Vec::from(batch))
                     .await
                     .into_result()
                     .map_err(std::io::Error::from)?;
@@ -130,7 +126,10 @@ impl FtdiContext {
             while read_len < read.len() {
                 let result = self
                     .handle
-                    .bulk_in(self.read_ep, RequestBuffer::new(self.max_packet_size))
+                    .bulk_in(
+                        self.interface.read_ep(),
+                        RequestBuffer::new(self.max_packet_size),
+                    )
                     .await
                     .into_result()
                     .map_err(std::io::Error::from)?;
