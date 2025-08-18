@@ -19,4 +19,3 @@ itertools = "0.14.0"
 lm75 = "1.0.0"
 sht31 = "0.3.2"
 spi-flash = "0.3.0"
-spi-flash2 = {package = "spi-flash" ,git="https://github.com/fan2nd/spi-flash-rs"}
