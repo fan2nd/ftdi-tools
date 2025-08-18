@@ -43,12 +43,12 @@ static FTDI_COMPAT_DEVICES: &[FtdiDevice] = &[
     // Olimex Ltd. ARM-USB-OCD
     FtdiDevice {
         id: (0x15ba, 0x0003),
-        fallback_chip_type: ChipType::FT2232C,
+        fallback_chip_type: ChipType::FT2232D,
     },
     // Olimex Ltd. ARM-USB-TINY
     FtdiDevice {
         id: (0x15ba, 0x0004),
-        fallback_chip_type: ChipType::FT2232C,
+        fallback_chip_type: ChipType::FT2232D,
     },
     // Olimex Ltd. ARM-USB-TINY-H
     FtdiDevice {

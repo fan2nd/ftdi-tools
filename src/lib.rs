@@ -37,7 +37,7 @@ pub mod swd;
 pub enum ChipType {
     Am,
     Bm,
-    FT2232C,
+    FT2232D,
     R,
     FT2232H,
     FT4232H,
@@ -48,14 +48,14 @@ impl ChipType {
     pub fn interface_list(self) -> &'static [Interface] {
         match self {
             ChipType::FT232H => &[Interface::A],
-            ChipType::FT2232H => &[Interface::A, Interface::B],
+            ChipType::FT2232H | ChipType::FT2232D => &[Interface::A, Interface::B],
             ChipType::FT4232H => &[Interface::A, Interface::B, Interface::C, Interface::D],
             _ => &[],
         }
     }
     pub fn mpsse_list(self) -> &'static [Interface] {
         match self {
-            ChipType::FT232H => &[Interface::A],
+            ChipType::FT232H | ChipType::FT2232D => &[Interface::A],
             ChipType::FT2232H | ChipType::FT4232H => &[Interface::A, Interface::B],
             _ => &[],
         }
@@ -63,8 +63,16 @@ impl ChipType {
     pub fn upper_pins(self) -> usize {
         match self {
             ChipType::FT232H | ChipType::FT2232H => 8,
+            ChipType::FT2232D => 4,
             ChipType::FT4232H => 0,
             _ => 0,
+        }
+    }
+    pub fn max_frequecny(self) -> (usize, Option<bool>) {
+        match self {
+            ChipType::FT2232D => (6_000_000, None),
+            ChipType::FT232H | ChipType::FT2232H | ChipType::FT4232H => (30_000_000, Some(false)),
+            _ => (0, None),
         }
     }
 }
@@ -133,7 +141,7 @@ pub enum FtdiError {
 
     #[error("Unsupported chip type: {0:?}")]
     /// The connected device is not supported by the driver.
-    UnsupportedChipType(ChipType),
+    UnsupportedChip(ChipType),
 
     #[error("Bad Mpsse Command: {0:#x}")]
     BadMpsseCommand(u8),

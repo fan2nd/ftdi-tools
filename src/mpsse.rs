@@ -66,14 +66,14 @@ impl FtdiMpsse {
             usb_device.device_version(),
             usb_device.serial_number().unwrap_or(""),
         ) {
-            (0x400, _) | (0x200, "") => return Err(FtdiError::UnsupportedChipType(ChipType::Bm)),
-            (0x200, _) => return Err(FtdiError::UnsupportedChipType(ChipType::Am)),
-            (0x500, _) => return Err(FtdiError::UnsupportedChipType(ChipType::FT2232C)),
-            (0x600, _) => return Err(FtdiError::UnsupportedChipType(ChipType::R)),
+            (0x400, _) | (0x200, "") => return Err(FtdiError::UnsupportedChip(ChipType::Bm)),
+            (0x200, _) => return Err(FtdiError::UnsupportedChip(ChipType::Am)),
+            (0x500, _) => ChipType::FT2232D,
+            (0x600, _) => return Err(FtdiError::UnsupportedChip(ChipType::R)),
             (0x700, _) => ChipType::FT2232H,
             (0x800, _) => ChipType::FT4232H,
             (0x900, _) => ChipType::FT232H,
-            (0x1000, _) => return Err(FtdiError::UnsupportedChipType(ChipType::FT230X)),
+            (0x1000, _) => return Err(FtdiError::UnsupportedChip(ChipType::FT230X)),
             (version, _) => {
                 return Err(FtdiError::OpenFailed(format!(
                     "Unknown ChipType version:0x{version:x}"
@@ -119,26 +119,26 @@ impl FtdiMpsse {
     /// Actual frequency may differ from target due to hardware limitations
     /// Supports frequencies from 458Hz to chip-specific maximum (typically 30MHz)
     pub fn set_frequency(&self, frequency_hz: usize) -> Result<usize, FtdiError> {
-        const MAX_FREQUENCY: usize = 30_000_000;
-        const MIN_FREQUENCY: usize = MAX_FREQUENCY / (u16::MAX as usize + 1) + 1;
+        let (max_frequency, clk_div_by5) = self.chip_type.max_frequecny();
+        let min_frequency = max_frequency / (u16::MAX as usize + 1) + 1;
 
-        let divisor = if frequency_hz > MAX_FREQUENCY {
-            log::warn!("frequency has out of range[{MIN_FREQUENCY}-{MAX_FREQUENCY}Hz]");
+        let divisor = if frequency_hz > max_frequency {
+            log::warn!("frequency has out of range[{min_frequency}-{max_frequency}Hz]");
             1
-        } else if frequency_hz < MIN_FREQUENCY {
-            log::warn!("frequency has out of range[{MIN_FREQUENCY}-{MAX_FREQUENCY}Hz]");
+        } else if frequency_hz < min_frequency {
+            log::warn!("frequency has out of range[{min_frequency}-{max_frequency}Hz]");
             u16::MAX as usize + 1
-        } else if MAX_FREQUENCY % frequency_hz != 0 {
-            MAX_FREQUENCY / frequency_hz + 1
+        } else if max_frequency % frequency_hz != 0 {
+            max_frequency / frequency_hz + 1
         } else {
-            MAX_FREQUENCY / frequency_hz
+            max_frequency / frequency_hz
         };
 
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_clock((divisor - 1) as u16, Some(false)); // [`EnableClockDivideBy5`] is useless because 458hz is already slow.
+        cmd.set_clock((divisor - 1) as u16, clk_div_by5); // [`EnableClockDivideBy5`] is useless because 458hz is already slow.
         self.write_read(cmd.as_slice(), &mut [])?;
-        log::info!("Frequency set to {}Hz", MAX_FREQUENCY / divisor);
-        Ok(MAX_FREQUENCY / divisor)
+        log::info!("Frequency set to {}Hz", max_frequency / divisor);
+        Ok(max_frequency / divisor)
     }
     /// Write mpsse command and read response
     pub(crate) fn write_read(&self, write: &[u8], read: &mut [u8]) -> Result<(), FtdiError> {
