@@ -9,7 +9,6 @@ FT232H,FT2232D,FT2232H,FT4232H
 - SWD
 - JtagDetect
 # Todo
-- [ ]add UsedPin
 - [ ]rewrite ftdi_eeprom
 # Thanks
 - [ftdi-embedded-hal](https://github.com/ftdi-rs/ftdi-embedded-hal)
