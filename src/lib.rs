@@ -45,7 +45,7 @@ pub enum ChipType {
     FT230X,
 }
 impl ChipType {
-    pub fn interface_list(self) -> &'static [Interface] {
+    pub(crate) const fn interface_list(self) -> &'static [Interface] {
         match self {
             ChipType::FT232H => &[Interface::A],
             ChipType::FT2232H | ChipType::FT2232D => &[Interface::A, Interface::B],
@@ -53,14 +53,14 @@ impl ChipType {
             _ => &[],
         }
     }
-    pub fn mpsse_list(self) -> &'static [Interface] {
+    pub(crate) const fn mpsse_list(self) -> &'static [Interface] {
         match self {
             ChipType::FT232H | ChipType::FT2232D => &[Interface::A],
             ChipType::FT2232H | ChipType::FT4232H => &[Interface::A, Interface::B],
             _ => &[],
         }
     }
-    pub fn upper_pins(self) -> usize {
+    pub(crate) const fn upper_pins(self) -> usize {
         match self {
             ChipType::FT232H | ChipType::FT2232H => 8,
             ChipType::FT2232D => 4,
@@ -68,7 +68,7 @@ impl ChipType {
             _ => 0,
         }
     }
-    pub fn max_frequecny(self) -> (usize, Option<bool>) {
+    pub(crate) const fn max_frequecny(self) -> (usize, Option<bool>) {
         match self {
             ChipType::FT2232D => (6_000_000, None),
             ChipType::FT232H | ChipType::FT2232H | ChipType::FT4232H => (30_000_000, Some(false)),
@@ -86,7 +86,7 @@ pub enum Interface {
 }
 
 impl Interface {
-    fn read_ep(self) -> u8 {
+    pub(crate) const fn read_ep(self) -> u8 {
         match self {
             Interface::A => 0x81,
             Interface::B => 0x83,
@@ -95,7 +95,7 @@ impl Interface {
         }
     }
 
-    fn write_ep(self) -> u8 {
+    pub(crate) const fn write_ep(self) -> u8 {
         match self {
             Interface::A => 0x02,
             Interface::B => 0x04,
@@ -104,12 +104,12 @@ impl Interface {
         }
     }
 
-    fn index(&self) -> u16 {
-        *self as u16
+    pub(crate) const fn index(self) -> u16 {
+        self as u16
     }
 
-    pub(crate) fn interface_number(&self) -> u8 {
-        (*self as u8) - 1
+    pub(crate) const fn interface_number(self) -> u8 {
+        (self as u8) - 1
     }
 }
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -118,7 +118,7 @@ pub enum Pin {
     Upper(usize),
 }
 impl Pin {
-    pub(crate) fn mask(&self) -> u8 {
+    pub(crate) const fn mask(self) -> u8 {
         match self {
             Pin::Lower(idx) => 1 << idx,
             Pin::Upper(idx) => 1 << idx,

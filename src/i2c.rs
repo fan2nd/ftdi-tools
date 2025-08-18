@@ -79,11 +79,11 @@ impl FtdiI2c {
         }
         lock.alloc_pin(pin, PinUse::I2c)?;
         match pin {
-            Pin::Lower(idx) => {
-                lock.lower.direction |= 1 << idx;
+            Pin::Lower(_) => {
+                lock.lower.direction |= pin.mask();
             }
-            Pin::Upper(idx) => {
-                lock.upper.direction |= 1 << idx;
+            Pin::Upper(_) => {
+                lock.upper.direction |= pin.mask();
             }
         }
         self.direction_pin = Some(pin);
@@ -341,8 +341,8 @@ impl eh1::i2c::I2c for FtdiI2c {
 }
 
 mod cmd {
-    const SCL: u8 = 1 << 0; // SCK bitmask
-    const SDA: u8 = 1 << 1; // DIO bitmask
+    const SCL: u8 = Pin::Lower(0).mask(); // SCK bitmask
+    const SDA: u8 = Pin::Lower(1).mask(); // DIO bitmask
     const TCK_INIT_VALUE: bool = false;
     const IS_LSB: bool = false;
     const DATA_BITS: usize = 8;
@@ -386,15 +386,15 @@ mod cmd {
             let sda = if sda { SDA } else { 0 };
             if let Some(pin) = self.direction_pin {
                 match pin {
-                    Pin::Lower(idx) => {
+                    Pin::Lower(_) => {
                         self.set_gpio_lower(
-                            lower_value | (1 << idx) | scl | sda,
+                            lower_value | pin.mask() | scl | sda,
                             lower_direction | SCL | SDA,
                         );
                     }
-                    Pin::Upper(idx) => {
+                    Pin::Upper(_) => {
                         self.set_gpio_lower(lower_value | scl | sda, lower_direction | SCL | SDA);
-                        self.set_gpio_upper(upper_value | (1 << idx), upper_direction);
+                        self.set_gpio_upper(upper_value | pin.mask(), upper_direction);
                     }
                 }
             } else {

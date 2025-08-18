@@ -6,10 +6,11 @@ use crate::{
 use eh1::spi::{Error, ErrorKind, ErrorType, MODE_0, MODE_2, Mode, Operation, SpiBus, SpiDevice};
 use std::sync::{Arc, Mutex};
 
-const SCK_MASK: u8 = 1 << 0;
-const MOSI_MASK: u8 = 1 << 1;
+const SCK_MASK: u8 = Pin::Lower(0).mask();
+const MOSI_MASK: u8 = Pin::Lower(1).mask();
 #[allow(unused)]
-const MISO_MASK: u8 = 1 << 2;
+const MISO_MASK: u8 = Pin::Lower(2).mask();
+const CS_MASK: u8 = Pin::Lower(3).mask();
 
 // Spi only support mode0 and mode2
 // TDI(AD1) can only can output on second edge.
@@ -292,8 +293,8 @@ impl FtdiSpiDevice {
             lock.alloc_pin(Pin::Lower(3), PinUse::Spi)?;
             // default MODE0, SCK(AD0) default 0
             // set SCK(AD0) and MOSI (AD1) as output pins
-            lock.lower.direction |= SCK_MASK | MOSI_MASK | (1 << 3);
-            lock.lower.value |= 1 << 3;
+            lock.lower.direction |= SCK_MASK | MOSI_MASK | CS_MASK;
+            lock.lower.value |= CS_MASK;
             let mut cmd = MpsseCmdBuilder::new();
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             lock.write_read(cmd.as_slice(), &mut [])?;
@@ -318,7 +319,10 @@ impl SpiDevice<u8> for FtdiSpiDevice {
     ) -> Result<(), Self::Error> {
         let lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.set_gpio_lower(lock.lower.value & (!(1 << 3)), lock.lower.direction);
+        cmd.set_gpio_lower(
+            lock.lower.value & !Pin::Lower(3).mask(),
+            lock.lower.direction,
+        );
         operations.iter().for_each(|op| match op {
             Operation::Read(read) => {
                 cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, read.len());

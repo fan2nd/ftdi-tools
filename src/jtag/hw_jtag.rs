@@ -9,11 +9,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-const TCK_MASK: u8 = 1 << 0;
-const TDI_MASK: u8 = 1 << 1;
+const TCK_MASK: u8 = Pin::Lower(0).mask();
+const TDI_MASK: u8 = Pin::Lower(1).mask();
 #[allow(unused)]
-const TDO_MASK: u8 = 1 << 2;
-const TMS_MASK: u8 = 1 << 3;
+const TDO_MASK: u8 = Pin::Lower(2).mask();
+const TMS_MASK: u8 = Pin::Lower(3).mask();
 // TCK(AD0) must be init with value 0.
 // TDI(AD1) only can output on second edge.
 // TDO(AD2) only can sample on first edge.

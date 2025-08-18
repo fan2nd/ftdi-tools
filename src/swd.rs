@@ -33,7 +33,7 @@ impl From<SwdAddr> for u8 {
         const AP_MASK: u8 = 1 << 1;
         const ADDR_MASK: u8 = 0b11 << 3;
         match value {
-            SwdAddr::Dp(addr) => (addr << 1) & ADDR_MASK,
+            SwdAddr::Dp(addr) => (addr << 1) & ADDR_MASK, // (addr >> 2 << 3) & ADDR_MASK
             SwdAddr::Ap(addr) => (addr << 1) & ADDR_MASK | AP_MASK,
         }
     }
@@ -92,11 +92,11 @@ impl FtdiSwd {
         }
         lock.alloc_pin(pin, PinUse::Swd)?;
         match pin {
-            Pin::Lower(idx) => {
-                lock.lower.direction |= 1 << idx;
+            Pin::Lower(_) => {
+                lock.lower.direction |= pin.mask();
             }
-            Pin::Upper(idx) => {
-                lock.upper.direction |= 1 << idx;
+            Pin::Upper(_) => {
+                lock.upper.direction |= pin.mask();
             }
         }
         self.direction_pin = Some(pin);
@@ -213,8 +213,8 @@ impl FtdiSwd {
 }
 
 mod cmd {
-    const SWCLK: u8 = 1 << 0; // SWCLK bitmask
-    const SWDIO: u8 = 1 << 1; // SWDIO bitmask
+    const SWCLK: u8 = Pin::Lower(0).mask(); // SWCLK bitmask
+    const SWDIO: u8 = Pin::Lower(1).mask(); // SWDIO bitmask
     const TCK_INIT_VALUE: bool = false;
     const IS_LSB: bool = true;
 
@@ -254,15 +254,15 @@ mod cmd {
             let upper_direction = self.lock.upper.direction;
             if let Some(pin) = self.direction_pin {
                 match pin {
-                    Pin::Lower(idx) => {
+                    Pin::Lower(_) => {
                         self.set_gpio_lower(
-                            lower_value | (1 << idx),
+                            lower_value | pin.mask(),
                             lower_direction | SWCLK | SWDIO,
                         );
                     }
-                    Pin::Upper(idx) => {
+                    Pin::Upper(_) => {
                         self.set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
-                        self.set_gpio_upper(upper_value | (1 << idx), upper_direction);
+                        self.set_gpio_upper(upper_value | pin.mask(), upper_direction);
                     }
                 }
             } else {

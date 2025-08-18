@@ -196,8 +196,8 @@ impl FtdiMpsse {
             Pin::Lower(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
                 self.lower.pins[idx] = None;
-                self.lower.value &= !(1 << idx); // set value to low
-                self.lower.direction &= !(1 << idx); // set direction to input
+                self.lower.value &= !pin.mask(); // set value to low
+                self.lower.direction &= !pin.mask(); // set direction to input
                 let mut cmd = MpsseCmdBuilder::new();
                 cmd.set_gpio_lower(self.lower.value, self.lower.direction);
                 self.write_read(cmd.as_slice(), &mut []).unwrap();
@@ -205,8 +205,8 @@ impl FtdiMpsse {
             Pin::Upper(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
                 self.upper.pins[idx] = None;
-                self.upper.value &= !(1 << idx); // set value to low
-                self.upper.direction &= !(1 << idx); // set direction to input
+                self.upper.value &= !pin.mask(); // set value to low
+                self.upper.direction &= !pin.mask(); // set direction to input
                 let mut cmd = MpsseCmdBuilder::new();
                 cmd.set_gpio_upper(self.upper.value, self.upper.direction);
                 self.write_read(cmd.as_slice(), &mut []).unwrap();

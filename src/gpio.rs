@@ -29,12 +29,12 @@ impl FtdiOutputPin {
         let mut cmd = MpsseCmdBuilder::new();
         lock.alloc_pin(pin, PinUse::Input)?;
         match pin {
-            Pin::Lower(idx) => {
-                lock.lower.direction |= 1 << idx;
+            Pin::Lower(_) => {
+                lock.lower.direction |= pin.mask();
                 cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             }
-            Pin::Upper(idx) => {
-                lock.upper.direction |= 1 << idx;
+            Pin::Upper(_) => {
+                lock.upper.direction |= pin.mask();
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
         }
@@ -47,19 +47,19 @@ impl FtdiOutputPin {
         let mut lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         match self.pin {
-            Pin::Lower(idx) => {
+            Pin::Lower(_) => {
                 if state {
-                    lock.lower.value |= 1 << idx;
+                    lock.lower.value |= self.pin.mask();
                 } else {
-                    lock.lower.value &= !(1 << idx);
+                    lock.lower.value &= !self.pin.mask();
                 }
                 cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             }
-            Pin::Upper(idx) => {
+            Pin::Upper(_) => {
                 if state {
-                    lock.upper.value |= 1 << idx;
+                    lock.upper.value |= self.pin.mask();
                 } else {
-                    lock.upper.value &= !(1 << idx);
+                    lock.upper.value &= !self.pin.mask();
                 }
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
@@ -114,12 +114,12 @@ impl FtdiInputPin {
         let mut cmd = MpsseCmdBuilder::new();
         lock.alloc_pin(pin, PinUse::Input)?;
         match pin {
-            Pin::Lower(idx) => {
-                lock.lower.direction &= !(1 << idx);
+            Pin::Lower(_) => {
+                lock.lower.direction &= !pin.mask();
                 cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             }
-            Pin::Upper(idx) => {
-                lock.upper.direction &= !(1 << idx);
+            Pin::Upper(_) => {
+                lock.upper.direction &= !pin.mask();
                 cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
             }
         }
@@ -139,7 +139,7 @@ impl FtdiInputPin {
         };
         lock.write_read(cmd.as_slice(), &mut response)?;
 
-        Ok((response[0] & self.pin.mask()) != 0)
+        Ok(response[0] & self.pin.mask() != 0)
     }
 }
 
