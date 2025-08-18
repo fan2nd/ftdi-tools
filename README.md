@@ -1,6 +1,6 @@
 # FTDI
 # Supported Chips
-FT232H,FT2232H,FT4232H
+FT232H,FT2232D,FT2232H,FT4232H
 # Supported Function
 - GPIO
 - SPI
