@@ -1,25 +1,12 @@
-use crate::{
-    FtdiError, Pin,
-    mpsse::{FtdiMpsse, PinUse},
-    mpsse_cmd::MpsseCmdBuilder,
-};
-use std::sync::{Arc, Mutex, MutexGuard};
+use crate::{FtdiError, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
 
-pub struct JtagDetectTdo {
+pub struct JtagDetectTdo<'a> {
     /// Thread-safe handle to FTDI MPSSE controller
-    mtx: Arc<Mutex<FtdiMpsse>>,
+    mpsse: &'a FtdiMpsse,
     tck: usize,
     tms: usize,
 }
-impl Drop for JtagDetectTdo {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        for i in 0..8 {
-            lock.free_pin(Pin::Lower(i));
-        }
-    }
-}
-impl JtagDetectTdo {
+impl<'a> JtagDetectTdo<'a> {
     /// Will use all lower pins as tdi(except tck & tms)
     ///
     /// If you want to use the level translation chip, please use [`crate::FtdiOutputPin`] to control.
@@ -27,18 +14,10 @@ impl JtagDetectTdo {
     /// Parameters:
     ///
     /// tck & tms are all lower pins index
-    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, tck: usize, tms: usize) -> Result<Self, FtdiError> {
-        let mut lock = mtx.lock().unwrap();
-        for i in 0..8 {
-            if i == tck || i == tms {
-                lock.alloc_pin(Pin::Lower(i), PinUse::Output)?;
-            } else {
-                lock.alloc_pin(Pin::Lower(i), PinUse::Input)?;
-            }
-        }
+    pub fn new(mtx: &'a FtdiMpsse, tck: usize, tms: usize) -> Result<Self, FtdiError> {
         // all pins default set to low
         Ok(Self {
-            mtx: mtx.clone(),
+            mpsse: mtx,
             tck,
             tms,
         })
@@ -51,8 +30,7 @@ impl JtagDetectTdo {
                 .set_gpio_lower(1 << self.tck, direction) // TCK1,TMS0,
                 .gpio_lower();
         }
-        let lock = self.mtx.lock().unwrap();
-        let response = lock.exec(cmd)?;
+        let response = self.mpsse.exec(cmd)?;
         Ok(response)
     }
     /// Scans JTAG chain to identify connected devices through TDO pins
@@ -73,8 +51,7 @@ impl JtagDetectTdo {
     pub fn scan(&self) -> Result<Vec<usize>, FtdiError> {
         const ID_LEN: usize = 32;
         let mut tdo_pins = Vec::new();
-        let lock = self.mtx.lock().unwrap();
-        reset2dr(lock, self.tck, self.tms)?;
+        reset2dr(self.mpsse, self.tck, self.tms)?;
         let read = self.shift_dr(ID_LEN * 2)?;
         // println!("read_buf{read:?}");
         for i in 0..8 {
@@ -114,44 +91,28 @@ impl JtagDetectTdo {
     }
 }
 
-pub struct JtagDetectTdi {
+pub struct JtagDetectTdi<'a> {
     /// Thread-safe handle to FTDI MPSSE controller
-    mtx: Arc<Mutex<FtdiMpsse>>,
+    mpsse: &'a FtdiMpsse,
     tck: usize,
     tdi: usize,
     tdo: usize,
     tms: usize,
 }
-impl Drop for JtagDetectTdi {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        for i in 0..8 {
-            lock.free_pin(Pin::Lower(i));
-        }
-    }
-}
-impl JtagDetectTdi {
+impl<'a> JtagDetectTdi<'a> {
     /// If you want to use the level translation chip, please use [`crate::FtdiOutputPin`] to control.
     /// Parameters:
     ///
     /// tck & tdi & tdo & tms are all lower pins index
     pub fn new(
-        mtx: Arc<Mutex<FtdiMpsse>>,
+        mtx: &'a FtdiMpsse,
         tck: usize,
         tdi: usize,
         tdo: usize,
         tms: usize,
     ) -> Result<Self, FtdiError> {
-        let mut lock = mtx.lock().unwrap();
-        for i in 0..8 {
-            if i == tdo {
-                lock.alloc_pin(Pin::Lower(i), PinUse::Input)?;
-            } else {
-                lock.alloc_pin(Pin::Lower(i), PinUse::Output)?;
-            }
-        }
         Ok(Self {
-            mtx: mtx.clone(),
+            mpsse: mtx,
             tck,
             tdi,
             tdo,
@@ -167,8 +128,7 @@ impl JtagDetectTdi {
                 .set_gpio_lower(tdi_mask | 1 << self.tck, direction) // TCK1,TMS0,
                 .gpio_lower();
         }
-        let lock = self.mtx.lock().unwrap();
-        let response = lock.exec(cmd)?;
+        let response = self.mpsse.exec(cmd)?;
         Ok(response
             .into_iter()
             .map(|x| x & (1 << self.tdo) != 0)
@@ -200,8 +160,7 @@ impl JtagDetectTdi {
         let mut bit_count = 0;
         let mut consecutive_bypass = 0;
 
-        let lock = self.mtx.lock().unwrap();
-        reset2dr(lock, self.tck, self.tms)?;
+        reset2dr(self.mpsse, self.tck, self.tms)?;
 
         'outer: loop {
             let tdos: Vec<_> = self.shift_dr(tdi_val, ID_LEN * 2)?;
@@ -235,7 +194,7 @@ impl JtagDetectTdi {
     }
 }
 // 将JTAG状态机复位到Run-Test/Idle状态, 然后切换到shift-dr
-fn reset2dr(lock: MutexGuard<FtdiMpsse>, tck: usize, tms: usize) -> Result<(), FtdiError> {
+fn reset2dr(mpsse: &FtdiMpsse, tck: usize, tms: usize) -> Result<(), FtdiError> {
     let tck_mask = 1 << tck;
     let tms_mask = 1 << tms;
     let direction = tck_mask | tms_mask;
@@ -259,6 +218,6 @@ fn reset2dr(lock: MutexGuard<FtdiMpsse>, tck: usize, tms: usize) -> Result<(), F
         .set_gpio_lower(tck_mask, direction) // TCK to high
         .set_gpio_lower(0, direction) // TCK to low
         .set_gpio_lower(tck_mask, direction); // TCK to high
-    lock.exec(cmd)?;
+    mpsse.exec(cmd)?;
     Ok(())
 }

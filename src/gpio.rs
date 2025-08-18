@@ -3,8 +3,42 @@ use crate::{
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
+pub(crate) struct UsedPin {
+    /// Thread-safe handle to FTDI MPSSE controller
+    mtx: Arc<Mutex<FtdiMpsse>>,
+    /// GPIO pin identifier
+    pin: Pin,
+}
+impl Drop for UsedPin {
+    fn drop(&mut self) {
+        let mut lock = self.mtx.lock().unwrap();
+        lock.free_pin(self.pin);
+    }
+}
+impl Deref for UsedPin {
+    type Target = Pin;
+    fn deref(&self) -> &Self::Target {
+        &self.pin
+    }
+}
+impl UsedPin {
+    pub(crate) fn new(
+        mtx: Arc<Mutex<FtdiMpsse>>,
+        pin: Pin,
+        usage: PinUse,
+    ) -> Result<Self, FtdiError> {
+        {
+            let mut lock = mtx.lock().unwrap();
+            lock.alloc_pin(pin, usage)?;
+        }
+        Ok(Self { mtx, pin })
+    }
+}
 /// FTDI GPIO output pin abstraction
 ///
 /// Represents a single GPIO pin configured as output. Manages pin state and
@@ -13,40 +47,37 @@ pub struct FtdiOutputPin {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// GPIO pin identifier
-    pin: Pin,
-}
-
-impl Drop for FtdiOutputPin {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(self.pin);
-    }
+    pin: UsedPin,
 }
 
 impl FtdiOutputPin {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
-        let mut lock = mtx.lock().unwrap();
-        let mut cmd = MpsseCmdBuilder::new();
-        lock.alloc_pin(pin, PinUse::Input)?;
-        match pin {
-            Pin::Lower(_) => {
-                lock.lower.direction |= pin.mask();
-                cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        let this = Self {
+            mtx: mtx.clone(),
+            pin: UsedPin::new(mtx.clone(), pin, PinUse::Output)?,
+        };
+        {
+            let mut lock = mtx.lock().unwrap();
+            let mut cmd = MpsseCmdBuilder::new();
+            match pin {
+                Pin::Lower(_) => {
+                    lock.lower.direction |= pin.mask();
+                    cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+                }
+                Pin::Upper(_) => {
+                    lock.upper.direction |= pin.mask();
+                    cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
+                }
             }
-            Pin::Upper(_) => {
-                lock.upper.direction |= pin.mask();
-                cmd.set_gpio_upper(lock.upper.value, lock.upper.direction);
-            }
+            lock.exec(cmd)?;
         }
-        lock.exec(cmd)?;
-        drop(lock);
-        Ok(FtdiOutputPin { mtx, pin })
+        Ok(this)
     }
 
     pub(crate) fn set(&self, state: bool) -> Result<(), FtdiError> {
         let mut lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
-        match self.pin {
+        match *self.pin {
             Pin::Lower(_) => {
                 if state {
                     lock.lower.value |= self.pin.mask();
@@ -98,21 +129,17 @@ pub struct FtdiInputPin {
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// GPIO pin index.
-    pin: Pin,
-}
-
-impl Drop for FtdiInputPin {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(self.pin);
-    }
+    pin: UsedPin,
 }
 
 impl FtdiInputPin {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
+        let this = Self {
+            mtx: mtx.clone(),
+            pin: UsedPin::new(mtx.clone(), pin, PinUse::Output)?,
+        };
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
-        lock.alloc_pin(pin, PinUse::Input)?;
         match pin {
             Pin::Lower(_) => {
                 lock.lower.direction &= !pin.mask();
@@ -124,15 +151,14 @@ impl FtdiInputPin {
             }
         }
         lock.exec(cmd)?;
-        drop(lock);
-        Ok(FtdiInputPin { mtx, pin })
+        Ok(this)
     }
 
     pub(crate) fn get(&self) -> Result<bool, FtdiError> {
         let lock = self.mtx.lock().unwrap();
 
         let mut cmd = MpsseCmdBuilder::new();
-        match self.pin {
+        match *self.pin {
             Pin::Lower(_) => cmd.gpio_lower(),
             Pin::Upper(_) => cmd.gpio_upper(),
         };

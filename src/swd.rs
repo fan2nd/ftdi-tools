@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use self::cmd::SwdCmdBuilder;
 use crate::{
     FtdiError, Pin,
+    gpio::UsedPin,
     mpsse::{FtdiMpsse, PinUse},
 };
 
@@ -41,21 +42,11 @@ impl From<SwdAddr> for u8 {
 /// Serial Wire Debug (SWD) interface controller
 /// Implements ARM Debug Interface v5 communication protocol
 pub struct FtdiSwd {
+    _pins: [UsedPin; 3],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Optional direction control pin for SWDIO signal (half-duplex mode)
-    direction_pin: Option<Pin>,
-}
-impl Drop for FtdiSwd {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-        if let Some(pin) = self.direction_pin {
-            lock.free_pin(pin);
-        }
-    }
+    direction_pin: Option<UsedPin>,
 }
 impl FtdiSwd {
     // Swd ACK (3 bits)
@@ -69,29 +60,21 @@ impl FtdiSwd {
     ///   Pin1 (DIO_OUTPUT) - Output
     ///   Pin2 (DIO_INPUT)  - Input
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSwdError> {
-        {
-            let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Swd)?;
-            lock.alloc_pin(Pin::Lower(1), PinUse::Swd)?;
-            lock.alloc_pin(Pin::Lower(2), PinUse::Swd)?;
-            // clear direction and value of first 3 pins
-            // pins default input and value 0
-            // AD0: SCK
-            // AD1: SWDIO_OUT (master out)
-            // AD2: SWDIO_IN (master in)
-        }
-        Ok(Self {
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Swd)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Swd)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Swd)?,
+            ],
             mtx,
             direction_pin: None,
-        })
+        };
+        Ok(this)
     }
     pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiSwdError> {
+        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::Swd)?);
         let mut lock = self.mtx.lock().unwrap();
-        if let Some(pin) = self.direction_pin {
-            lock.free_pin(pin);
-        }
-        lock.alloc_pin(pin, PinUse::Swd)?;
-        match pin {
+        match self.direction_pin.as_deref().unwrap() {
             Pin::Lower(_) => {
                 lock.lower.direction |= pin.mask();
             }
@@ -99,14 +82,13 @@ impl FtdiSwd {
                 lock.upper.direction |= pin.mask();
             }
         }
-        self.direction_pin = Some(pin);
         Ok(())
     }
     /// Send SWD activation sequence
     /// Sequence: >50 ones + 0x79E7 (MSB first) + >50 ones
     pub fn enable(&self) -> Result<(), FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
-        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.swd_enable();
 
         lock.exec(cmd)?;
@@ -149,14 +131,14 @@ impl FtdiSwd {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(true, addr);
         // Send request (8 bits)
-        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.swd_send_request(request).trn().swd_read_response();
         let response = lock.exec(cmd)?;
 
         // Read ACK (3 bits)
         let ack = response[0] >> 5;
         if ack != Self::REPONSE_SUCCESS {
-            let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+            let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
             cmd.trn();
             lock.exec(cmd)?;
             return match ack {
@@ -168,7 +150,7 @@ impl FtdiSwd {
 
         // Read data (32 bits) + parity (1 bit) = 33 bits
         // 33 bits = 5 bytes
-        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.swd_read_data().trn();
         let response = lock.exec(cmd)?;
 
@@ -186,7 +168,7 @@ impl FtdiSwd {
     pub fn write(&self, addr: SwdAddr, value: u32) -> Result<(), FtdiSwdError> {
         let lock = self.mtx.lock().unwrap();
         let request = Self::build_request(false, addr);
-        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.swd_send_request(request)
             .trn()
             .swd_read_response()
@@ -203,7 +185,7 @@ impl FtdiSwd {
             };
         }
         // Send data (33 bits)
-        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = SwdCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.swd_write_data(value);
         lock.exec(cmd)?;
         Ok(())
@@ -243,11 +225,11 @@ mod cmd {
         }
     }
     impl<'a> SwdCmdBuilder<'a> {
-        pub(super) fn new(lock: &'a MutexGuard<FtdiMpsse>, direction_pin: Option<Pin>) -> Self {
+        pub(super) fn new(lock: &'a MutexGuard<FtdiMpsse>, direction_pin: Option<&Pin>) -> Self {
             SwdCmdBuilder {
                 cmd: MpsseCmdBuilder::new(),
                 lock,
-                direction_pin,
+                direction_pin: direction_pin.copied(),
             }
         }
         fn swd_out(&mut self) -> &mut Self {

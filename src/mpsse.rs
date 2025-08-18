@@ -93,7 +93,7 @@ impl FtdiMpsse {
         cmd.set_gpio_lower(0, 0) // set all pin to input and value 0;
             .set_gpio_upper(0, 0) // set all pin to input and value 0;
             .enable_loopback(false);
-        if chip_type != ChipType::FT2232D {
+        if chip_type == ChipType::FT2232D {
             cmd.set_clock(0, None);
         } else {
             cmd.enable_3phase_data_clocking(false)
@@ -155,14 +155,15 @@ impl FtdiMpsse {
         Ok(response)
     }
     /// Allocate a pin for a specific use.
-    pub(crate) fn alloc_pin(&mut self, pin: Pin, purpose: PinUse) -> Result<(), FtdiError> {
+    pub(crate) fn alloc_pin(&mut self, pin: Pin, usage: PinUse) -> Result<(), FtdiError> {
+        log::trace!("alloc pin {:?} for {:?}", pin, usage);
         if !self.chip_type.mpsse_list().contains(&self.interface)
-            && (purpose != PinUse::Input || purpose != PinUse::Output)
+            && (usage != PinUse::Input || usage != PinUse::Output)
         {
             return Err(FtdiError::IncorrectUsage {
                 chip: self.chip_type,
                 interface: self.interface,
-                usage: purpose,
+                usage,
             });
         };
         let (byte, idx) = match pin {
@@ -190,16 +191,17 @@ impl FtdiMpsse {
         if let Some(current) = byte.pins[idx] {
             return Err(FtdiError::PinInUsed {
                 pin,
-                purpose,
+                purpose: usage,
                 current,
             });
         } else {
-            byte.pins[idx] = Some(purpose)
+            byte.pins[idx] = Some(usage)
         }
         Ok(())
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn free_pin(&mut self, pin: Pin) {
+        log::trace!("free pin {:?}", pin);
         match pin {
             Pin::Lower(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");

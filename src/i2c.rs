@@ -1,6 +1,7 @@
 use self::cmd::I2cCmdBuilder;
 use crate::{
     ChipType, FtdiError, Pin,
+    gpio::UsedPin,
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
@@ -18,29 +19,24 @@ pub enum FtdiI2cError {
 ///
 /// Implements I2C bus communication with support for start/stop conditions and clock stretching
 pub struct FtdiI2c {
+    _pins: [UsedPin; 3],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Length of start, repeated start, and stop conditions in MPSSE commands
     /// More commands increase the duration of these conditions
     start_stop_cmds: usize,
     /// Optional direction pin for SDA line direction control (if used)
-    direction_pin: Option<Pin>,
+    direction_pin: Option<UsedPin>,
     enable_fast: bool,
 }
 
 impl Drop for FtdiI2c {
     fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
+        let lock = self.mtx.lock().unwrap();
         if lock.chip_type != ChipType::FT2232D {
             let mut cmd = MpsseCmdBuilder::new();
             cmd.enable_3phase_data_clocking(false);
             lock.exec(cmd).unwrap();
-        }
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-        if let Some(pin) = self.direction_pin {
-            lock.free_pin(pin);
         }
     }
 }
@@ -49,40 +45,34 @@ impl FtdiI2c {
     const SLAVE_ACK_MASK: u8 = 1 << 0;
     const SLAVE_NOT_ACK: u8 = Self::SLAVE_ACK_MASK;
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiI2cError> {
-        {
-            let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::I2c)?;
-            lock.alloc_pin(Pin::Lower(1), PinUse::I2c)?;
-            lock.alloc_pin(Pin::Lower(2), PinUse::I2c)?;
-            // clear direction and value of first 3 pins
-            // pins default input and value 0
-            // AD0: SCL
-            // AD1: SDA (master out)
-            // AD2: SDA (master in)
-            let mut cmd = MpsseCmdBuilder::new();
-            if lock.chip_type != ChipType::FT2232D {
-                cmd.enable_3phase_data_clocking(true);
-                lock.exec(cmd)?;
-            }
-        }
-        let this = FtdiI2c {
-            mtx,
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::I2c)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::I2c)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::I2c)?,
+            ],
+            mtx: mtx.clone(),
             start_stop_cmds: 3,
             direction_pin: None,
             enable_fast: false,
         };
+        {
+            let lock = mtx.lock().unwrap();
+            if lock.chip_type != ChipType::FT2232D {
+                let mut cmd = MpsseCmdBuilder::new();
+                cmd.enable_3phase_data_clocking(true);
+                lock.exec(cmd)?;
+            }
+        }
         log::info!("IIC default 100Khz");
         this.set_frequency(100_000)?;
         Ok(this)
     }
 
     pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiI2cError> {
+        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::Swd)?);
         let mut lock = self.mtx.lock().unwrap();
-        if let Some(pin) = self.direction_pin {
-            lock.free_pin(pin);
-        }
-        lock.alloc_pin(pin, PinUse::I2c)?;
-        match pin {
+        match self.direction_pin.as_deref().unwrap() {
             Pin::Lower(_) => {
                 lock.lower.direction |= pin.mask();
             }
@@ -90,20 +80,12 @@ impl FtdiI2c {
                 lock.upper.direction |= pin.mask();
             }
         }
-        self.direction_pin = Some(pin);
         Ok(())
     }
     pub fn enbale_fast(&mut self, enable: bool) {
         self.enable_fast = enable;
     }
 
-    /// Set the length of start and stop conditions.
-    ///
-    /// This is an advanced feature that most people will not need to touch.
-    /// I2C start and stop conditions are generated with a number of MPSSE
-    /// commands.  This sets the number of MPSSE command generated for each
-    /// stop and start condition.  An increase in the number of MPSSE commands
-    /// roughtly correlates to an increase in the duration.
     pub fn set_stop_start_len(&mut self, start_stop_cmds: usize) {
         self.start_stop_cmds = start_stop_cmds
     }
@@ -140,7 +122,7 @@ impl FtdiI2c {
         let lock = self.mtx.lock().unwrap();
 
         // start
-        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.start(self.start_stop_cmds);
         lock.exec(cmd)?;
 
@@ -149,21 +131,21 @@ impl FtdiI2c {
             match operation {
                 Operation::Read(buffer) => {
                     if op_idx == 0 || !prev_op_was_a_read {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                         if op_idx != 0 {
                             cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, true); // (Address+Read)+Ack
                         let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
-                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                             cmd.end(self.start_stop_cmds);
                             lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
 
-                    let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                    let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                     for idx in 0..buffer.len() {
                         if idx == buffer.len() - 1 {
                             cmd.i2c_read(false); // NMAK: Master Not Ack
@@ -178,27 +160,27 @@ impl FtdiI2c {
                 }
                 Operation::Write(bytes) => {
                     if op_idx == 0 || prev_op_was_a_read {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                         if op_idx != 0 {
                             cmd.restart(self.start_stop_cmds); // repeated start
                         }
                         cmd.i2c_addr(address, false); // (Address+Write)+Ack
                         let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK {
-                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                             cmd.end(self.start_stop_cmds);
                             lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Address));
                         }
                     }
                     for idx in 0..bytes.len() {
-                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                         cmd.i2c_write(bytes[idx]);
                         let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK
                             && idx != bytes.len() - 1
                         {
-                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+                            let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                             cmd.end(self.start_stop_cmds);
                             lock.exec(cmd)?;
                             return Err(FtdiI2cError::NoAck(NoAcknowledgeSource::Data));
@@ -210,7 +192,7 @@ impl FtdiI2c {
         }
 
         // stop
-        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.end(self.start_stop_cmds);
         lock.exec(cmd)?;
 
@@ -226,7 +208,7 @@ impl FtdiI2c {
         let lock = self.mtx.lock().unwrap();
 
         // start
-        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin);
+        let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.start(self.start_stop_cmds);
 
         let mut prev_op_was_a_read: bool = false;
@@ -379,11 +361,11 @@ mod cmd {
         }
     }
     impl<'a> I2cCmdBuilder<'a> {
-        pub(super) fn new(lock: &'a MutexGuard<FtdiMpsse>, direction_pin: Option<Pin>) -> Self {
+        pub(super) fn new(lock: &'a MutexGuard<FtdiMpsse>, direction_pin: Option<&Pin>) -> Self {
             I2cCmdBuilder {
                 cmd: MpsseCmdBuilder::new(),
                 lock,
-                direction_pin,
+                direction_pin: direction_pin.copied(),
             }
         }
         fn i2c_out(&mut self, scl: bool, sda: bool) -> &mut Self {

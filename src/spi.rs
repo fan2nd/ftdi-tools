@@ -1,5 +1,6 @@
 use crate::{
     FtdiError, Pin,
+    gpio::UsedPin,
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
@@ -37,6 +38,7 @@ impl Error for FtdiSpiError {
 ///
 /// Implements full-duplex synchronous serial communication with configurable mode
 pub struct FtdiSpi {
+    _pins: [UsedPin; 3],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Initial value of SCK line (clock polarity) - determines idle state
@@ -45,37 +47,29 @@ pub struct FtdiSpi {
     is_lsb: bool,
 }
 
-impl Drop for FtdiSpi {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-    }
-}
-
 impl FtdiSpi {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
-        {
-            let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
-
-            // default MODE0, SCK(AD0) default 0
-            // set SCK(AD0) and MOSI (AD1) as output pins
-            lock.lower.direction |= SCK_MASK | MOSI_MASK;
-
-            let mut cmd = MpsseCmdBuilder::new();
-            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.exec(cmd)?;
-        }
-        // default msb mode0
-        Ok(Self {
-            mtx,
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+            ],
+            mtx: mtx.clone(),
             tck_init_value: false,
             is_lsb: false,
-        })
+        };
+
+        let mut lock = mtx.lock().unwrap();
+        // default MODE0, SCK(AD0) default 0
+        // set SCK(AD0) and MOSI (AD1) as output pins
+        lock.lower.direction |= SCK_MASK | MOSI_MASK;
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        lock.exec(cmd)?;
+
+        // default msb mode0
+        Ok(this)
     }
     /// set spi mode and bitorder
     pub fn set_mode(&mut self, mode: Mode, is_lsb: bool) -> Result<(), FtdiSpiError> {
@@ -83,11 +77,11 @@ impl FtdiSpi {
         // set SCK polarity
         match mode {
             MODE_0 => {
-                lock.lower.value &= !(0x01); // set SCK(AD0) to 0
+                lock.lower.value &= !SCK_MASK; // set SCK(AD0) to 0
                 self.tck_init_value = false;
             }
             MODE_2 => {
-                lock.lower.value |= 0x01; // set SCK(AD0) to 1
+                lock.lower.value |= SCK_MASK; // set SCK(AD0) to 1
                 self.tck_init_value = true;
             }
             _ => {
@@ -163,6 +157,7 @@ impl SpiBus<u8> for FtdiSpi {
 ///
 /// Implements full-duplex synchronous serial communication with configurable mode
 pub struct FtdiSpiHalfduplex {
+    _pins: [UsedPin; 3],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Initial value of SCK line (clock polarity) - determines idle state
@@ -171,36 +166,29 @@ pub struct FtdiSpiHalfduplex {
     is_lsb: bool,
 }
 
-impl Drop for FtdiSpiHalfduplex {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-    }
-}
-
 impl FtdiSpiHalfduplex {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
-        {
-            let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
-
-            // default MODE0, SCK(AD0) default 0
-            // set SCK(AD0) and MOSI (AD1) as output pins
-            lock.lower.direction |= 0x03;
-
-            let mut cmd = MpsseCmdBuilder::new();
-            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.exec(cmd)?;
-        }
-        Ok(Self {
-            mtx,
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+            ],
+            mtx: mtx.clone(),
             tck_init_value: false,
             is_lsb: false,
-        })
+        };
+
+        let mut lock = mtx.lock().unwrap();
+        // default MODE0, SCK(AD0) default 0
+        // set SCK(AD0) and MOSI (AD1) as output pins
+        lock.lower.direction |= SCK_MASK | MOSI_MASK;
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        lock.exec(cmd)?;
+
+        // default msb mode0
+        Ok(this)
     }
     /// set spi mode and bitorder
     pub fn set_mode(&mut self, mode: Mode, is_lsb: bool) -> Result<(), FtdiSpiError> {
@@ -208,11 +196,11 @@ impl FtdiSpiHalfduplex {
         // set SCK polarity
         match mode {
             MODE_0 => {
-                lock.lower.value &= !(0x01); // set SCK(AD0) to 0
+                lock.lower.value &= !SCK_MASK; // set SCK(AD0) to 0
                 self.tck_init_value = false;
             }
             MODE_2 => {
-                lock.lower.value |= 0x01; // set SCK(AD0) to 1
+                lock.lower.value |= SCK_MASK; // set SCK(AD0) to 1
                 self.tck_init_value = true;
             }
             _ => {
@@ -269,6 +257,7 @@ impl SpiBus for FtdiSpiHalfduplex {
     }
 }
 pub struct FtdiSpiDevice {
+    _pins: [UsedPin; 4],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Initial value of SCK line (clock polarity) - determines idle state
@@ -277,38 +266,29 @@ pub struct FtdiSpiDevice {
     is_lsb: bool,
 }
 
-impl Drop for FtdiSpiDevice {
-    fn drop(&mut self) {
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-        lock.free_pin(Pin::Lower(3));
-    }
-}
-
 impl FtdiSpiDevice {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
-        {
-            let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(1), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(2), PinUse::Spi)?;
-            lock.alloc_pin(Pin::Lower(3), PinUse::Spi)?;
-            // default MODE0, SCK(AD0) default 0
-            // set SCK(AD0) and MOSI (AD1) as output pins
-            lock.lower.direction |= SCK_MASK | MOSI_MASK | CS_MASK;
-            lock.lower.value |= CS_MASK;
-            let mut cmd = MpsseCmdBuilder::new();
-            cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-            lock.exec(cmd)?;
-        }
-        // default msb mode0
-        Ok(Self {
-            mtx,
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Spi)?,
+            ],
+            mtx: mtx.clone(),
             tck_init_value: false,
             is_lsb: false,
-        })
+        };
+        let mut lock = mtx.lock().unwrap();
+        // default MODE0, SCK(AD0) default 0
+        // set SCK(AD0) and MOSI (AD1) as output pins
+        lock.lower.direction |= SCK_MASK | MOSI_MASK | CS_MASK;
+        lock.lower.value |= CS_MASK;
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        lock.exec(cmd)?;
+        // default msb mode0
+        Ok(this)
     }
 }
 

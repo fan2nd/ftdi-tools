@@ -1,6 +1,6 @@
 use crate::{
     ChipType, FtdiError, Pin,
-    gpio::FtdiOutputPin,
+    gpio::{FtdiOutputPin, UsedPin},
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
@@ -25,21 +25,17 @@ const IS_LSB: bool = true;
 /// JTAG (Joint Test Action Group) interface controller
 /// Implements JTAG state machine management and data transfer operations
 pub struct FtdiJtag {
+    _pins: [UsedPin; 4],
     /// Thread-safe handle to FTDI MPSSE controller
     mtx: Arc<Mutex<FtdiMpsse>>,
     /// Whether adaptive clocking (RTCK) is enabled
-    adaptive_clocking: bool,
+    adaptive_clocking_pin: Option<UsedPin>,
     /// Optional custom pin assignments for JTAG signals
     direction: Option<[FtdiOutputPin; 4]>,
 }
 impl Drop for FtdiJtag {
     fn drop(&mut self) {
         self.adaptive_clock(false).unwrap();
-        let mut lock = self.mtx.lock().unwrap();
-        lock.free_pin(Pin::Lower(0));
-        lock.free_pin(Pin::Lower(1));
-        lock.free_pin(Pin::Lower(2));
-        lock.free_pin(Pin::Lower(3));
     }
 }
 impl FtdiJtag {
@@ -58,12 +54,19 @@ impl FtdiJtag {
     /// - TDO: Lower(2) - Test Data Out
     /// - TMS: Lower(3) - Test Mode Select
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Spi)?,
+            ],
+            mtx: mtx.clone(),
+            adaptive_clocking_pin: None,
+            direction: None,
+        };
         {
             let mut lock = mtx.lock().unwrap();
-            lock.alloc_pin(Pin::Lower(0), PinUse::Jtag)?; // TCK
-            lock.alloc_pin(Pin::Lower(1), PinUse::Jtag)?; // TDI
-            lock.alloc_pin(Pin::Lower(2), PinUse::Jtag)?; // TDO (input)
-            lock.alloc_pin(Pin::Lower(3), PinUse::Jtag)?; // TMS
             // Set TCK, TDI, TMS as output pins (0x0b = 00001011)
             lock.lower.direction |= TCK_MASK | TDI_MASK | TMS_MASK;
             // TCK must initialize to low (AN108-2.2)
@@ -74,11 +77,7 @@ impl FtdiJtag {
             cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
             lock.exec(cmd)?;
         }
-        Ok(Self {
-            mtx,
-            adaptive_clocking: false,
-            direction: None,
-        })
+        Ok(this)
     }
     /// Enables/disables adaptive clocking (RTCK)
     ///
@@ -88,24 +87,26 @@ impl FtdiJtag {
     /// # Notes
     /// Requires JTAG target to support RTCK feedback
     pub fn adaptive_clock(&mut self, state: bool) -> Result<(), FtdiError> {
-        if self.adaptive_clocking == state {
+        if self.adaptive_clocking_pin.is_some() == state {
             return Ok(());
         }
-        let mut lock = self.mtx.lock().unwrap();
-        if lock.chip_type == ChipType::FT2232D {
-            return Ok(());
+        {
+            let lock = self.mtx.lock().unwrap();
+            if lock.chip_type == ChipType::FT2232D {
+                return Ok(());
+            }
+            let mut cmd = MpsseCmdBuilder::new();
+            cmd.enable_adaptive_clocking(state);
+            lock.exec(cmd)?;
         }
-        let mut cmd = MpsseCmdBuilder::new();
         if state {
             log::info!("Use {:?} as RTCK.", Pin::Lower(7));
-            lock.alloc_pin(Pin::Lower(7), PinUse::Jtag)?;
+            self.adaptive_clocking_pin =
+                Some(UsedPin::new(self.mtx.clone(), Pin::Lower(7), PinUse::Jtag)?);
         } else {
             log::info!("Free {:?}.", Pin::Lower(7));
-            lock.free_pin(Pin::Lower(7));
+            self.adaptive_clocking_pin = None;
         }
-        cmd.enable_adaptive_clocking(state);
-        lock.exec(cmd)?;
-        self.adaptive_clocking = state;
         Ok(())
     }
     /// Configures custom JTAG pin assignments
