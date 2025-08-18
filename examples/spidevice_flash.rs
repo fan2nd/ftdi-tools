@@ -8,12 +8,6 @@ use spi_flash::{Error, Flash, FlashAccess};
 struct FlashDevice<T>(T);
 impl<T: SpiDevice> FlashAccess for FlashDevice<T> {
     type Error = Error;
-    fn write(&mut self, data: &[u8]) -> core::result::Result<(), Self::Error> {
-        self.0
-            .write(data)
-            .map_err(|_| Error::Access(anyhow!("fuck rust error")))?;
-        Ok(())
-    }
     fn exchange(&mut self, data: &[u8]) -> core::result::Result<Vec<u8>, Self::Error> {
         let mut result = vec![0; data.len()];
         self.0

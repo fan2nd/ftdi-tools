@@ -52,8 +52,8 @@ impl FtdiSpi {
         let this = Self {
             _pins: [
                 UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
             ],
             mtx: mtx.clone(),
             tck_init_value: false,
@@ -171,8 +171,8 @@ impl FtdiSpiHalfduplex {
         let this = Self {
             _pins: [
                 UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
             ],
             mtx: mtx.clone(),
             tck_init_value: false,
@@ -307,7 +307,7 @@ impl SpiDevice<u8> for FtdiSpiDevice {
             lock.lower.value & !Pin::Lower(3).mask(),
             lock.lower.direction,
         );
-        operations.iter().for_each(|op| match op {
+        operations.iter_mut().for_each(|op| match op {
             Operation::Read(read) => {
                 cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, read.len());
             }
