@@ -54,10 +54,10 @@ impl FtdiJtag {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Jtag)?,
             ],
             mtx: mtx.clone(),
             adaptive_clocking_pin: None,

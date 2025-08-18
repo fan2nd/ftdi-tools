@@ -70,7 +70,7 @@ impl FtdiI2c {
     }
 
     pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiI2cError> {
-        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::Swd)?);
+        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::I2c)?);
         let mut lock = self.mtx.lock().unwrap();
         match self.direction_pin.as_deref().unwrap() {
             Pin::Lower(_) => {

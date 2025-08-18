@@ -156,7 +156,6 @@ impl FtdiMpsse {
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn alloc_pin(&mut self, pin: Pin, usage: PinUse) -> Result<(), FtdiError> {
-        log::trace!("alloc pin {:?} for {:?}", pin, usage);
         if !self.chip_type.mpsse_list().contains(&self.interface)
             && (usage != PinUse::Input || usage != PinUse::Output)
         {
@@ -195,13 +194,14 @@ impl FtdiMpsse {
                 current,
             });
         } else {
+            log::trace!("pin {:?} has been alloced for {:?}", pin, usage);
             byte.pins[idx] = Some(usage)
         }
         Ok(())
     }
     /// Allocate a pin for a specific use.
     pub(crate) fn free_pin(&mut self, pin: Pin) {
-        log::trace!("free pin {:?}", pin);
+        log::trace!("pin {:?} has been released", pin);
         match pin {
             Pin::Lower(idx) => {
                 assert!(idx < 8, "Pin index {idx} is out of range 0 - 7");
