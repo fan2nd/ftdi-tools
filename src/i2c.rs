@@ -335,25 +335,11 @@ mod cmd {
     const ACK_BITS: usize = 1;
 
     use crate::{Pin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
-    use std::{
-        ops::{Deref, DerefMut},
-        sync::MutexGuard,
-    };
+    use std::sync::MutexGuard;
     pub(super) struct I2cCmdBuilder<'a> {
         cmd: MpsseCmdBuilder,
         lock: &'a MutexGuard<'a, FtdiMpsse>,
         direction_pin: Option<Pin>,
-    }
-    impl<'a> Deref for I2cCmdBuilder<'a> {
-        type Target = MpsseCmdBuilder;
-        fn deref(&self) -> &Self::Target {
-            &self.cmd
-        }
-    }
-    impl<'a> DerefMut for I2cCmdBuilder<'a> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.cmd
-        }
     }
     impl<'a> From<I2cCmdBuilder<'a>> for MpsseCmdBuilder {
         fn from(value: I2cCmdBuilder<'a>) -> Self {
@@ -378,18 +364,21 @@ mod cmd {
             if let Some(pin) = self.direction_pin {
                 match pin {
                     Pin::Lower(_) => {
-                        self.set_gpio_lower(
+                        self.cmd.set_gpio_lower(
                             lower_value | pin.mask() | scl | sda,
                             lower_direction | SCL | SDA,
                         );
                     }
                     Pin::Upper(_) => {
-                        self.set_gpio_lower(lower_value | scl | sda, lower_direction | SCL | SDA);
-                        self.set_gpio_upper(upper_value | pin.mask(), upper_direction);
+                        self.cmd
+                            .set_gpio_lower(lower_value | scl | sda, lower_direction | SCL | SDA);
+                        self.cmd
+                            .set_gpio_upper(upper_value | pin.mask(), upper_direction);
                     }
                 }
             } else {
-                self.set_gpio_lower(lower_value | scl | sda, lower_direction | SCL | SDA);
+                self.cmd
+                    .set_gpio_lower(lower_value | scl | sda, lower_direction | SCL | SDA);
             }
             self
         }
@@ -399,9 +388,9 @@ mod cmd {
             let upper_value = self.lock.upper.value;
             let upper_direction = self.lock.upper.direction;
             if let Some(Pin::Upper(_)) = self.direction_pin {
-                self.set_gpio_upper(upper_value, upper_direction);
+                self.cmd.set_gpio_upper(upper_value, upper_direction);
             }
-            self.set_gpio_lower(lower_value, lower_direction | SCL);
+            self.cmd.set_gpio_lower(lower_value, lower_direction | SCL);
             self
         }
         pub(super) fn start(&mut self, count: usize) -> &mut Self {
@@ -436,23 +425,29 @@ mod cmd {
         }
         pub(super) fn i2c_addr(&mut self, addr: u8, is_read: bool) -> &mut Self {
             let addr = if is_read { (addr << 1) | 1 } else { addr << 1 };
-            self.clock_bits_out(TCK_INIT_VALUE, IS_LSB, addr, DATA_BITS);
+            self.cmd
+                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, addr, DATA_BITS);
             self.i2c_in()
+                .cmd
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
             self
         }
         pub(super) fn i2c_read(&mut self, m_ack: bool) -> &mut Self {
             let m_ack = if m_ack { 0 } else { 0xff };
             self.i2c_in()
+                .cmd
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, DATA_BITS);
             self.i2c_out(false, false)
+                .cmd
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, m_ack, ACK_BITS);
             self
         }
         pub(super) fn i2c_write(&mut self, value: u8) -> &mut Self {
             self.i2c_out(false, false)
+                .cmd
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, value, DATA_BITS);
             self.i2c_in()
+                .cmd
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
             self
         }

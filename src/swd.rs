@@ -199,25 +199,11 @@ mod cmd {
     const IS_LSB: bool = true;
 
     use crate::{Pin, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
-    use std::{
-        ops::{Deref, DerefMut},
-        sync::MutexGuard,
-    };
+    use std::sync::MutexGuard;
     pub(super) struct SwdCmdBuilder<'a> {
         cmd: MpsseCmdBuilder,
         lock: &'a MutexGuard<'a, FtdiMpsse>,
         direction_pin: Option<Pin>,
-    }
-    impl<'a> Deref for SwdCmdBuilder<'a> {
-        type Target = MpsseCmdBuilder;
-        fn deref(&self) -> &Self::Target {
-            &self.cmd
-        }
-    }
-    impl<'a> DerefMut for SwdCmdBuilder<'a> {
-        fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.cmd
-        }
     }
     impl<'a> From<SwdCmdBuilder<'a>> for MpsseCmdBuilder {
         fn from(value: SwdCmdBuilder<'a>) -> Self {
@@ -240,18 +226,21 @@ mod cmd {
             if let Some(pin) = self.direction_pin {
                 match pin {
                     Pin::Lower(_) => {
-                        self.set_gpio_lower(
+                        self.cmd.set_gpio_lower(
                             lower_value | pin.mask(),
                             lower_direction | SWCLK | SWDIO,
                         );
                     }
                     Pin::Upper(_) => {
-                        self.set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
-                        self.set_gpio_upper(upper_value | pin.mask(), upper_direction);
+                        self.cmd
+                            .set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
+                        self.cmd
+                            .set_gpio_upper(upper_value | pin.mask(), upper_direction);
                     }
                 }
             } else {
-                self.set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
+                self.cmd
+                    .set_gpio_lower(lower_value, lower_direction | SWCLK | SWDIO);
             }
             self
         }
@@ -261,13 +250,15 @@ mod cmd {
             let upper_value = self.lock.upper.value;
             let upper_direction = self.lock.upper.direction;
             if let Some(Pin::Upper(_)) = self.direction_pin {
-                self.set_gpio_upper(upper_value, upper_direction);
+                self.cmd.set_gpio_upper(upper_value, upper_direction);
             }
-            self.set_gpio_lower(lower_value, lower_direction | SWCLK);
+            self.cmd
+                .set_gpio_lower(lower_value, lower_direction | SWCLK);
             self
         }
         pub(super) fn trn(&mut self) -> &mut Self {
             self.swd_in()
+                .cmd
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, 0xff, 1);
             self
         }
@@ -275,6 +266,7 @@ mod cmd {
             const ONES: &[u8] = &[0xff; 7];
             const ZEOS: u8 = 0;
             self.swd_out()
+                .cmd
                 .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones (LSB first)
                 // AdiV5.2-B4.3.3
                 // A line reset is achieved by holding the data signal HIGH for at least 50 clock cycles, followed by at least two idle cycles.
@@ -288,6 +280,7 @@ mod cmd {
             // 0xE79E, transmitted least-significant-bit (LSB) first.
             const SEQUENCE: &[u8] = &0xE79E_u16.to_le_bytes();
             self.swd_out()
+                .cmd
                 .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones
                 .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, SEQUENCE);
             self.swd_line_reset();
@@ -295,12 +288,14 @@ mod cmd {
         }
         pub(super) fn swd_send_request(&mut self, request: u8) -> &mut Self {
             self.swd_out()
+                .cmd
                 .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &[request]); // // Send request
             self
         }
         pub(super) fn swd_read_response(&mut self) -> &mut Self {
             const RESPONSE_BITS: usize = 3;
             self.swd_in()
+                .cmd
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, RESPONSE_BITS);
             self
         }
@@ -308,6 +303,7 @@ mod cmd {
             const DATA_BYTES: usize = 4;
             const PARITY_BITS: usize = 1;
             self.swd_in()
+                .cmd
                 .clock_bytes_in(TCK_INIT_VALUE, IS_LSB, DATA_BYTES)
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, PARITY_BITS);
             self
@@ -317,6 +313,7 @@ mod cmd {
             let bytes = value.to_le_bytes();
             let parity = (value.count_ones() & 0x01) as u8;
             self.swd_out()
+                .cmd
                 .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &bytes)
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, parity, PARITY_BITS);
             self

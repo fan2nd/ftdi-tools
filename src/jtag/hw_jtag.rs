@@ -4,10 +4,7 @@ use crate::{
     mpsse::{FtdiMpsse, PinUse},
     mpsse_cmd::MpsseCmdBuilder,
 };
-use std::{
-    ops::{Deref, DerefMut},
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 const TCK_MASK: u8 = Pin::Lower(0).mask();
 const TDI_MASK: u8 = Pin::Lower(1).mask();
@@ -257,17 +254,6 @@ impl FtdiJtag {
 }
 
 struct JtagCmdBuilder(MpsseCmdBuilder);
-impl Deref for JtagCmdBuilder {
-    type Target = MpsseCmdBuilder;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for JtagCmdBuilder {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 impl From<JtagCmdBuilder> for MpsseCmdBuilder {
     fn from(value: JtagCmdBuilder) -> Self {
         value.0
@@ -278,27 +264,27 @@ impl JtagCmdBuilder {
         JtagCmdBuilder(MpsseCmdBuilder::new())
     }
     fn jtag_any2idle(&mut self) -> &mut Self {
-        self.clock_tms_out(0b0001_1111, true, 6);
+        self.0.clock_tms_out(0b0001_1111, true, 6);
         self
     }
     fn jtag_idle_cycle(&mut self) -> &mut Self {
-        self.clock_tms_out(0, true, 7);
+        self.0.clock_tms_out(0, true, 7);
         self
     }
     fn jtag_idle2ir(&mut self) -> &mut Self {
-        self.clock_tms_out(0b0000_0011, true, 4);
+        self.0.clock_tms_out(0b0000_0011, true, 4);
         self
     }
     fn jtag_ir_exit2dr(&mut self) -> &mut Self {
-        self.clock_tms_out(0b0000_0011, true, 4);
+        self.0.clock_tms_out(0b0000_0011, true, 4);
         self
     }
     fn jtag_idle2dr(&mut self) -> &mut Self {
-        self.clock_tms_out(0b0000_0001, true, 3);
+        self.0.clock_tms_out(0b0000_0001, true, 3);
         self
     }
     fn jtag_dr_exit2idle(&mut self) -> &mut Self {
-        self.clock_tms_out(0b0000_0001, true, 2);
+        self.0.clock_tms_out(0b0000_0001, true, 2);
         self
     }
     fn jtag_shift(&mut self, data: &[u8], bits_count: usize) -> &mut Self {
@@ -306,7 +292,8 @@ impl JtagCmdBuilder {
         let bytes_count = (bits_count - 1) >> 3;
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = data[bytes_count] >> remain_bits == 1;
-        self.clock_bytes(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
+        self.0
+            .clock_bytes(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
             .clock_bits(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
             .clock_tms(0b0000_0001, last_bit, 1);
         self
@@ -316,7 +303,8 @@ impl JtagCmdBuilder {
         let bytes_count = (bits_count - 1) >> 3;
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = data[bytes_count] >> remain_bits == 1;
-        self.clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
+        self.0
+            .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
             .clock_bits_out(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
             .clock_tms_out(0b0000_0001, last_bit, 1);
         self
@@ -326,7 +314,8 @@ impl JtagCmdBuilder {
         let bytes_count = (bits_count - 1) >> 3;
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = Default::default(); // the last bit of tdi when shift2exit
-        self.clock_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
+        self.0
+            .clock_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
             .clock_bits_in(TCK_INIT_VALUE, IS_LSB, remain_bits)
             .clock_tms(0b0000_0001, last_bit, 1);
         self
