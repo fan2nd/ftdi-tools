@@ -3,8 +3,8 @@ use crate::{FtdiError, mpsse::FtdiMpsse, mpsse_cmd::MpsseCmdBuilder};
 pub struct JtagDetectTdo<'a> {
     /// Thread-safe handle to FTDI MPSSE controller
     mpsse: &'a FtdiMpsse,
-    tck: usize,
-    tms: usize,
+    tck_mask: u8,
+    tms_mask: u8,
 }
 impl<'a> JtagDetectTdo<'a> {
     /// Will use all lower pins as tdi(except tck & tms)
@@ -18,16 +18,16 @@ impl<'a> JtagDetectTdo<'a> {
         // all pins default set to low
         Ok(Self {
             mpsse: mtx,
-            tck,
-            tms,
+            tck_mask: 1 << tck,
+            tms_mask: 1 << tms,
         })
     }
     fn shift_dr(&self, len: usize) -> Result<Vec<u8>, FtdiError> {
-        let direction = 1 << self.tck | 1 << self.tms;
+        let direction = self.tck_mask | self.tms_mask;
         let mut cmd = MpsseCmdBuilder::new();
         for _ in 0..len {
             cmd.set_gpio_lower(0, direction) // TCK0,TMS0,
-                .set_gpio_lower(1 << self.tck, direction) // TCK1,TMS0,
+                .set_gpio_lower(self.tck_mask, direction) // TCK1,TMS0,
                 .gpio_lower();
         }
         let response = self.mpsse.exec(cmd)?;
@@ -51,11 +51,11 @@ impl<'a> JtagDetectTdo<'a> {
     pub fn scan(&self) -> Result<Vec<usize>, FtdiError> {
         const ID_LEN: usize = 32;
         let mut tdo_pins = Vec::new();
-        reset2dr(self.mpsse, self.tck, self.tms)?;
+        reset2dr(self.mpsse, self.tck_mask, self.tms_mask)?;
         let read = self.shift_dr(ID_LEN * 2)?;
         // println!("read_buf{read:?}");
         for i in 0..8 {
-            if i == self.tck || i == self.tms {
+            if 1 << i == self.tck_mask || 1 << i == self.tms_mask {
                 continue;
             }
             let mut current_id = 0;
@@ -94,10 +94,10 @@ impl<'a> JtagDetectTdo<'a> {
 pub struct JtagDetectTdi<'a> {
     /// Thread-safe handle to FTDI MPSSE controller
     mpsse: &'a FtdiMpsse,
-    tck: usize,
-    tdi: usize,
-    tdo: usize,
-    tms: usize,
+    tck_mask: u8,
+    tdi_mask: u8,
+    tdo_mask: u8,
+    tms_mask: u8,
 }
 impl<'a> JtagDetectTdi<'a> {
     /// If you want to use the level translation chip, please use [`crate::FtdiOutputPin`] to control.
@@ -106,6 +106,7 @@ impl<'a> JtagDetectTdi<'a> {
     /// tck & tdi & tdo & tms are all lower pins index
     pub fn new(
         mtx: &'a FtdiMpsse,
+
         tck: usize,
         tdi: usize,
         tdo: usize,
@@ -113,25 +114,25 @@ impl<'a> JtagDetectTdi<'a> {
     ) -> Result<Self, FtdiError> {
         Ok(Self {
             mpsse: mtx,
-            tck,
-            tdi,
-            tdo,
-            tms,
+            tck_mask: 1 << tck,
+            tdi_mask: 1 << tdi,
+            tdo_mask: 1 << tdo,
+            tms_mask: 1 << tms,
         })
     }
     fn shift_dr(&self, tdi_value: bool, len: usize) -> Result<Vec<bool>, FtdiError> {
-        let direction = !(1 << self.tdo); // all output except tdo
-        let tdi_mask = if tdi_value { 1 << self.tdi } else { 0 };
+        let direction = !(self.tdo_mask); // all output except tdo
+        let tdi_mask = if tdi_value { self.tdi_mask } else { 0 };
         let mut cmd = MpsseCmdBuilder::new();
         for _ in 0..len {
             cmd.set_gpio_lower(tdi_mask, direction) // TCK0,TMS0,
-                .set_gpio_lower(tdi_mask | 1 << self.tck, direction) // TCK1,TMS0,
+                .set_gpio_lower(tdi_mask | self.tck_mask, direction) // TCK1,TMS0,
                 .gpio_lower();
         }
         let response = self.mpsse.exec(cmd)?;
         Ok(response
             .into_iter()
-            .map(|x| x & (1 << self.tdo) != 0)
+            .map(|x| x & (self.tdo_mask) != 0)
             .collect())
     }
     /// Scans JTAG chain to identify connected devices with specified TDI value
@@ -160,7 +161,7 @@ impl<'a> JtagDetectTdi<'a> {
         let mut bit_count = 0;
         let mut consecutive_bypass = 0;
 
-        reset2dr(self.mpsse, self.tck, self.tms)?;
+        reset2dr(self.mpsse, self.tck_mask, self.tms_mask)?;
 
         'outer: loop {
             let tdos: Vec<_> = self.shift_dr(tdi_val, ID_LEN * 2)?;
@@ -194,9 +195,7 @@ impl<'a> JtagDetectTdi<'a> {
     }
 }
 // 将JTAG状态机复位到Run-Test/Idle状态, 然后切换到shift-dr
-fn reset2dr(mpsse: &FtdiMpsse, tck: usize, tms: usize) -> Result<(), FtdiError> {
-    let tck_mask = 1 << tck;
-    let tms_mask = 1 << tms;
+fn reset2dr(mpsse: &FtdiMpsse, tck_mask: u8, tms_mask: u8) -> Result<(), FtdiError> {
     let direction = tck_mask | tms_mask;
     let mut cmd = MpsseCmdBuilder::new();
     cmd.set_gpio_lower(tck_mask, direction);
