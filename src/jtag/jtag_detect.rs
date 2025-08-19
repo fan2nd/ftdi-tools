@@ -14,10 +14,10 @@ impl<'a> JtagDetectTdo<'a> {
     /// Parameters:
     ///
     /// tck & tms are all lower pins index
-    pub fn new(mtx: &'a FtdiMpsse, tck: usize, tms: usize) -> Result<Self, FtdiError> {
+    pub fn new(mpsse: &'a FtdiMpsse, tck: usize, tms: usize) -> Result<Self, FtdiError> {
         // all pins default set to low
         Ok(Self {
-            mpsse: mtx,
+            mpsse,
             tck_mask: 1 << tck,
             tms_mask: 1 << tms,
         })
@@ -105,7 +105,7 @@ impl<'a> JtagDetectTdi<'a> {
     ///
     /// tck & tdi & tdo & tms are all lower pins index
     pub fn new(
-        mtx: &'a FtdiMpsse,
+        mpsse: &'a FtdiMpsse,
 
         tck: usize,
         tdi: usize,
@@ -113,7 +113,7 @@ impl<'a> JtagDetectTdi<'a> {
         tms: usize,
     ) -> Result<Self, FtdiError> {
         Ok(Self {
-            mpsse: mtx,
+            mpsse,
             tck_mask: 1 << tck,
             tdi_mask: 1 << tdi,
             tdo_mask: 1 << tdo,
