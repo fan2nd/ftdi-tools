@@ -40,33 +40,33 @@ use sht31::prelude::*;
 fn main() -> anyhow::Result<()> {
     // 初始化日志系统，支持通过 RUST_LOG 环境变量控制输出级别
     env_logger::init();
-    
+
     // 获取系统中所有可用的 FTDI 设备列表
     let devices = list_all_device();
     // 检查是否找到可用的 FTDI 设备
     assert!(!devices.is_empty(), "Not found Ftdi devices");
-    
+
     // 打开第一个可用的 FTDI 设备的第一个接口
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, devices[0].interface[0])?;
     // 将 MPSSE 控制器包装在线程安全的互斥锁中
     let mtx = Arc::new(Mutex::new(mpsse));
-    
+
     // 创建 I2C 主控制器，默认时钟频率 100kHz
     let mut i2c = FtdiI2c::new(mtx)?;
     // 启用快速模式，提高数据传输效率
     // 快速模式会将多个操作打包在一个 MPSSE 命令中
     i2c.enbale_fast(true);
-    
+
     // 扫描 I2C 总线以查找连接的设备
     let addr_set = i2c.scan();
     // 输出扫描结果，显示所有在线设备的 I2C 地址
     println!("i2c detect:{:#x?}", addr_set);
-    
+
     // 创建 SHT31 传感器实例，配置为单次测量模式
     let mut sht = SHT31::single_shot(i2c, SingleShot::new())
-        .with_accuracy(Accuracy::High)           // 设置为高精度模式
-        .with_unit(TemperatureUnit::Celsius)      // 温度单位设置为摄氏度
-        .with_address(DeviceAddr::AD0);           // 使用默认地址 0x44
+        .with_accuracy(Accuracy::High) // 设置为高精度模式
+        .with_unit(TemperatureUnit::Celsius) // 温度单位设置为摄氏度
+        .with_address(DeviceAddr::AD0); // 使用默认地址 0x44
 
     // 启动测量过程，这个操作是异步的
     // SHT31 需要一定时间来完成温湿度测量

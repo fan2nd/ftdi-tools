@@ -40,21 +40,21 @@ use ftdi_tools::{
 use spi_flash::{Error, Flash, FlashAccess};
 
 /// Flash 设备包装结构体
-/// 
+///
 /// 将 SpiDevice trait 包装成 FlashAccess trait，以便与 spi-flash 库兼容
 struct FlashDevice<T>(T);
 
 /// 为 FlashDevice 实现 FlashAccess trait
-/// 
+///
 /// 这个实现将 embedded-hal 的 SpiDevice 接口转换为 spi-flash 库所需的 FlashAccess 接口
 impl<T: SpiDevice> FlashAccess for FlashDevice<T> {
     type Error = Error;
-    
+
     /// 执行 SPI 数据交换操作
-    /// 
+    ///
     /// # 参数
     /// * `data` - 要发送到 Flash 的数据
-    /// 
+    ///
     /// # 返回值
     /// * `Ok(Vec<u8>)` - 从 Flash 接收到的数据
     /// * `Err(Error)` - SPI 通信错误
@@ -76,51 +76,51 @@ impl<T: SpiDevice> FlashAccess for FlashDevice<T> {
 /// 2. 配置 GPIO 作为片选信号
 /// 3. 读取 Flash 设备信息
 /// 4. 执行全片编程操作
-/// 
+///
 /// 返回值: anyhow::Result<()> - 成功或错误信息
 fn main() -> anyhow::Result<()> {
     // 初始化日志系统以输出调试信息
     env_logger::init();
-    
+
     // 获取系统中所有可用的 FTDI 设备
     let devices = list_all_device();
     // 验证至少存在一个可用的 FTDI 设备
     assert!(!devices.is_empty(), "Not found Ftdi devices");
-    
+
     // 打开第一个 FTDI 设备的接口 A
     // 接口 A 通常具有最完整的 MPSSE 功能支持
     let mpsse = FtdiMpsse::open(&devices[0].usb_device, Interface::A)?;
     // 使用 Arc<Mutex<>> 包装以支持多线程安全访问
     let mtx = Arc::new(Mutex::new(mpsse));
-    
+
     // 创建 SPI 控制器并将其包装在 RefCell 中
     // RefCell 允许在运行时进行内部可变性检查
     let spi = RefCell::new(FtdiSpi::new(mtx.clone())?);
-    
+
     // 创建 GPIO 输出引脚用于控制 Flash 的片选 (CS) 信号
     // Pin::Lower(3) 对应 FTDI AD3 引脚
     let gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
-    
+
     // 创建 SPI 设备实例，结合 SPI 总线和片选控制
     // RefCellDevice::new_no_delay 创建一个没有延时的 SPI 设备实例
     let mut flash_device = FlashDevice(RefCellDevice::new_no_delay(&spi, gpio)?);
-    
+
     // 初始化 Flash 存储器接口
     let mut flash = Flash::new(&mut flash_device);
-    
+
     // 读取并显示 Flash 设备的 JEDEC ID
     // JEDEC ID 通常包含 3 字节: 厂商 ID + 设备类型 + 容量
     let id = flash.read_id()?;
     println!("Flash JEDEC ID: {}", id);
-    
+
     // 读取 Flash 设备的参数信息 (如容量、擦除块大小等)
     let param = flash.read_params()?.unwrap();
     println!("Flash parameters: {}", param);
-    
+
     // 创建测试数据: 从 0 到 capacity-1 的字节序列
     // 警告: 这会生成与 Flash 容量相同大小的数据！
     let data: Vec<_> = (0..param.capacity_bytes()).map(|x| x as u8).collect();
-    
+
     // 执行全片编程操作
     // 参数说明: 起始地址=0, 数据=data, 校验=true
     // 注意: 这个操作会擦除整个 Flash 并重新编程!
