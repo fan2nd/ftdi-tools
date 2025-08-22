@@ -71,10 +71,11 @@ fn main() -> anyhow::Result<()> {
     // 启动测量过程，这个操作是异步的
     // SHT31 需要一定时间来完成温湿度测量
     sht.measure()?;
+    std::thread::sleep(Duration::from_secs(1));
 
     // 读取温湿度数据并循环显示
     // 此处使用 while let 来持续读取数据直到发生错误
-    while let Ok(reading) = sht.read() {
+    if let Ok(reading) = sht.read() {
         // reading 包含温度和湿度信息
         println!("{reading:?}");
     }
