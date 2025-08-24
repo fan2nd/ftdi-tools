@@ -519,7 +519,7 @@ impl MpsseCmdBuilder {
     /// * `tdi` - Value to place on TDI while clocking.
     /// * `len` - Number of bits to clock out.
     ///   This will panic for values greater than 7.
-    pub(crate) fn clock_tms_out(&mut self, data: u8, tdi: bool, len: usize) -> &mut Self {
+    pub(crate) fn clock_tms_out(&mut self, tdi: bool, data: u8, len: usize) -> &mut Self {
         if len == 0 {
             return self;
         }
@@ -539,7 +539,7 @@ impl MpsseCmdBuilder {
     /// * `tdi` - Value to place on TDI while clocking.
     /// * `len` - Number of bits to clock out.
     ///   This will panic for values greater than 7.
-    pub(crate) fn clock_tms(&mut self, data: u8, tdi: bool, len: usize) -> &mut Self {
+    pub(crate) fn clock_tms(&mut self, tdi: bool, data: u8, len: usize) -> &mut Self {
         if len == 0 {
             return self;
         }

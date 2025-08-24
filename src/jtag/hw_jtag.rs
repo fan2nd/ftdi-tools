@@ -268,27 +268,27 @@ impl JtagCmdBuilder {
         JtagCmdBuilder(MpsseCmdBuilder::new())
     }
     fn jtag_any2idle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0001_1111, true, 6);
+        self.0.clock_tms_out(true, 0b0001_1111, 6);
         self
     }
     fn jtag_idle_cycle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0, true, 7);
+        self.0.clock_tms_out(true, 0, 7);
         self
     }
     fn jtag_idle2ir(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0011, true, 4);
+        self.0.clock_tms_out(true, 0b0000_0011, 4);
         self
     }
     fn jtag_ir_exit2dr(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0011, true, 4);
+        self.0.clock_tms_out(true, 0b0000_0011, 4);
         self
     }
     fn jtag_idle2dr(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0001, true, 3);
+        self.0.clock_tms_out(true, 0b0000_0001, 3);
         self
     }
     fn jtag_dr_exit2idle(&mut self) -> &mut Self {
-        self.0.clock_tms_out(0b0000_0001, true, 2);
+        self.0.clock_tms_out(true, 0b0000_0001, 2);
         self
     }
     fn jtag_shift(&mut self, data: &[u8], bits_count: usize) -> &mut Self {
@@ -299,7 +299,7 @@ impl JtagCmdBuilder {
         self.0
             .clock_bytes(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
             .clock_bits(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
-            .clock_tms(0b0000_0001, last_bit, 1);
+            .clock_tms(last_bit, 0b0000_0001, 1);
         self
     }
     fn jtag_shift_write(&mut self, data: &[u8], bits_count: usize) -> &mut Self {
@@ -310,7 +310,7 @@ impl JtagCmdBuilder {
         self.0
             .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
             .clock_bits_out(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
-            .clock_tms_out(0b0000_0001, last_bit, 1);
+            .clock_tms_out(last_bit, 0b0000_0001, 1);
         self
     }
     fn jtag_shift_read(&mut self, bits_count: usize) -> &mut Self {
@@ -321,7 +321,7 @@ impl JtagCmdBuilder {
         self.0
             .clock_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
             .clock_bits_in(TCK_INIT_VALUE, IS_LSB, remain_bits)
-            .clock_tms(0b0000_0001, last_bit, 1);
+            .clock_tms(last_bit, 0b0000_0001, 1);
         self
     }
     fn jtag_parse_single_shift(response: &mut [u8], bits_count: usize) -> usize {
