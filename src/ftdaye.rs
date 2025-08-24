@@ -131,7 +131,7 @@ impl FtdiContext {
                 .into_result()
                 .map_err(std::io::Error::from)?;
             if result.len() < 2 {
-                return Err(FtdiError::Other("Usb bulkin lenth not correct"));
+                return Err(FtdiError::Other("Usb bulkin length not correct"));
             }
             let (response_status, response_data) = result.split_at(2);
             if response_status[0] == 0xFA {

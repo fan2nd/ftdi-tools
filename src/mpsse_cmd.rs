@@ -124,6 +124,9 @@ impl MpsseShiftCmd {
 /// [FTDI MPSSE Basics]: https://www.ftdichip.com/Support/Documents/AppNotes/AN_135_MPSSE_Basics.pdf
 /// [`send`]: MpsseCmdExecutor::send
 /// [`xfer`]: MpsseCmdExecutor::xfer
+const MAX_BYTES_SHIFT: usize = 65536;
+const MAX_BITS_SHIFT: usize = 8;
+const MAX_TMS_SHIFT: usize = 7;
 #[derive(Default)]
 pub(crate) struct MpsseCmdBuilder {
     cmd: Vec<u8>,
@@ -312,11 +315,25 @@ impl MpsseCmdBuilder {
         is_lsb: bool,
         data: &[u8],
     ) -> &mut Self {
+        for slice in data.chunks(MAX_BYTES_SHIFT) {
+            self.clock_bytes_out_limited(tck_init_value, is_lsb, slice);
+        }
+        self
+    }
+    fn clock_bytes_out_limited(
+        &mut self,
+        tck_init_value: bool,
+        is_lsb: bool,
+        data: &[u8],
+    ) -> &mut Self {
         let mut len = data.len();
         if len == 0 {
             return self;
         }
-        assert!(len <= 65536, "data length should be in 1..=65536");
+        assert!(
+            len <= MAX_BYTES_SHIFT,
+            "data length should be less than {MAX_BYTES_SHIFT}"
+        );
         len -= 1;
         self.cmd.extend_from_slice(&[
             MpsseShiftCmd::shift(tck_init_value, false, is_lsb, true, false),
@@ -343,10 +360,26 @@ impl MpsseCmdBuilder {
         is_lsb: bool,
         mut len: usize,
     ) -> &mut Self {
+        while len >= MAX_BYTES_SHIFT {
+            self.clock_bytes_in_limited(tck_init_value, is_lsb, MAX_BYTES_SHIFT);
+            len -= MAX_BYTES_SHIFT;
+        }
+        self.clock_bytes_in_limited(tck_init_value, is_lsb, len);
+        self
+    }
+    fn clock_bytes_in_limited(
+        &mut self,
+        tck_init_value: bool,
+        is_lsb: bool,
+        mut len: usize,
+    ) -> &mut Self {
         if len == 0 {
             return self;
         }
-        assert!(len <= 65536, "data length should be in 1..=65536");
+        assert!(
+            len <= MAX_BYTES_SHIFT,
+            "data length should be less than {MAX_BYTES_SHIFT}"
+        );
         self.read_len += len;
         len -= 1;
         self.cmd.extend_from_slice(&[
@@ -366,11 +399,25 @@ impl MpsseCmdBuilder {
         is_lsb: bool,
         data: &[u8],
     ) -> &mut Self {
+        for slice in data.chunks(MAX_BYTES_SHIFT) {
+            self.clock_bytes_limited(tck_init_value, is_lsb, slice);
+        }
+        self
+    }
+    fn clock_bytes_limited(
+        &mut self,
+        tck_init_value: bool,
+        is_lsb: bool,
+        data: &[u8],
+    ) -> &mut Self {
         let mut len = data.len();
         if len == 0 {
             return self;
         }
-        assert!(len <= 65536, "data length should be in 1..=65536");
+        assert!(
+            len <= MAX_BYTES_SHIFT,
+            "data length should be less than {MAX_BYTES_SHIFT}"
+        );
         self.read_len += len;
         len -= 1;
         self.cmd.extend_from_slice(&[
@@ -400,7 +447,7 @@ impl MpsseCmdBuilder {
         if len == 0 {
             return self;
         }
-        assert!(len <= 8, "data length should be in 1..=8");
+        assert!(len <= 8, "data length should be less than {MAX_BITS_SHIFT}");
         self.cmd.extend_from_slice(&[
             MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, false),
             (len - 1) as u8,
@@ -425,7 +472,7 @@ impl MpsseCmdBuilder {
         if len == 0 {
             return self;
         }
-        assert!(len <= 8, "data length should be in 1..=8");
+        assert!(len <= 8, "data length should be less than {MAX_BITS_SHIFT}");
         self.read_len += 1;
         self.cmd.extend_from_slice(&[
             MpsseShiftCmd::shift(tck_init_value, true, is_lsb, false, true),
@@ -448,10 +495,12 @@ impl MpsseCmdBuilder {
         data: u8,
         len: usize,
     ) -> &mut Self {
+        // Normally len will only be 1.
         if len == 0 {
             return self;
         }
-        assert!(len <= 8, "data length should be in 1..=8");
+        assert!(len <= 8, "data length should be less than {MAX_BITS_SHIFT}");
+
         self.read_len += 1;
         self.cmd.extend_from_slice(&[
             MpsseShiftCmd::shift(tck_init_value, true, is_lsb, true, true),
@@ -474,7 +523,7 @@ impl MpsseCmdBuilder {
         if len == 0 {
             return self;
         }
-        assert!(len <= 7, "data length should be in 1..=7");
+        assert!(len <= 7, "data length should be less than {MAX_TMS_SHIFT}");
         let data = if tdi { data | 0x80 } else { data };
         self.cmd
             .extend_from_slice(&[MpsseShiftCmd::tms_shift(false), (len - 1) as u8, data]);
@@ -494,7 +543,7 @@ impl MpsseCmdBuilder {
         if len == 0 {
             return self;
         }
-        assert!(len <= 7, "data length should be in 1..=7");
+        assert!(len <= 7, "data length should be less than {MAX_TMS_SHIFT}");
         self.read_len += 1;
         let data = if tdi { data | 0x80 } else { data };
         self.cmd
