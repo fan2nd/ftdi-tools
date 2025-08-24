@@ -297,6 +297,7 @@ impl SpiDevice<u8> for FtdiSpiDevice {
         operations: &mut [eh1::spi::Operation<'_, u8>],
     ) -> Result<(), Self::Error> {
         let lock = self.mtx.lock().unwrap();
+        // send request
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(
             lock.lower.value & !Pin::Lower(3).mask(),
@@ -319,6 +320,7 @@ impl SpiDevice<u8> for FtdiSpiDevice {
         });
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
         let response = lock.exec(cmd)?;
+        // parse response
         let mut len = 0;
         operations.iter_mut().for_each(|op| {
             len += match op {
