@@ -135,14 +135,10 @@ impl MpsseCmdBuilder {
         Default::default()
     }
 
-    /// Get the MPSSE command as a slice.
-    pub fn as_slice(&mut self) -> &[u8] {
-        self.send_immediate().cmd.as_slice()
-    }
-
-    /// Get the response length of current MPSSE command.
-    pub fn read_len(&self) -> usize {
-        self.read_len
+    /// Destruct the MPSSE command.
+    pub fn destruct(mut self) -> (Vec<u8>, Vec<u8>) {
+        self.send_immediate();
+        (self.cmd, vec![0; self.read_len])
     }
 
     /// Set the MPSSE clock frequency using provided

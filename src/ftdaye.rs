@@ -110,49 +110,50 @@ impl FtdiContext {
 
         Ok(())
     }
-    pub(crate) fn write_read(&self, write: &[u8], read: &mut [u8]) -> Result<(), FtdiError> {
-        let write = async {
-            for batch in write.chunks(self.max_packet_size) {
-                self.handle
-                    .bulk_out(self.interface.write_ep(), Vec::from(batch))
-                    .await
-                    .into_result()
-                    .map_err(std::io::Error::from)?;
+    pub(crate) async fn async_write(&self, data: Vec<u8>) -> Result<(), FtdiError> {
+        self.handle
+            .bulk_out(self.interface.write_ep(), data)
+            .await
+            .into_result()
+            .map_err(std::io::Error::from)?;
+        Ok(())
+    }
+    pub(crate) async fn async_read(&self, data: &mut [u8]) -> Result<(), FtdiError> {
+        let mut read_len = 0;
+        while read_len < data.len() {
+            let result = self
+                .handle
+                .bulk_in(
+                    self.interface.read_ep(),
+                    RequestBuffer::new(self.max_packet_size),
+                )
+                .await
+                .into_result()
+                .map_err(std::io::Error::from)?;
+            if result.len() < 2 {
+                return Err(FtdiError::Other("Usb bulkin lenth not correct"));
             }
-            Result::<(), FtdiError>::Ok(())
-        };
-        let read = async {
-            let mut read_len = 0;
-            while read_len < read.len() {
-                let result = self
-                    .handle
-                    .bulk_in(
-                        self.interface.read_ep(),
-                        RequestBuffer::new(self.max_packet_size),
-                    )
-                    .await
-                    .into_result()
-                    .map_err(std::io::Error::from)?;
-                if result.len() > 2 {
-                    let (status, data) = result.split_at(2);
-                    if status[0] == 0xFA {
-                        return Err(FtdiError::BadMpsseCommand(status[1]));
-                    }
-                    let (_, read_buf) = read.split_at_mut(read_len);
-                    let (read_buf, _) = read_buf.split_at_mut(data.len());
-                    read_buf.copy_from_slice(data);
-                    read_len += data.len()
-                }
+            let (response_status, response_data) = result.split_at(2);
+            if response_status[0] == 0xFA {
+                return Err(FtdiError::BadMpsseCommand(response_status[1]));
             }
-            Result::<(), FtdiError>::Ok(())
-        };
-        let result = block_on(zip(write, read));
-        if result.0.is_err() {
-            result.0
-        } else if result.1.is_err() {
-            result.1
-        } else {
-            Ok(())
+            let (_, read_buf) = data.split_at_mut(read_len);
+            let (read_buf, _) = read_buf.split_at_mut(response_data.len());
+            read_buf.copy_from_slice(response_data);
+            read_len += response_data.len()
         }
+        Ok(())
+    }
+    pub(crate) async fn async_write_read(
+        &self,
+        write: Vec<u8>,
+        read: &mut [u8],
+    ) -> Result<(), FtdiError> {
+        let (write_result, read_result) = zip(self.async_write(write), self.async_read(read)).await;
+        write_result?;
+        read_result
+    }
+    pub(crate) fn write_read(&self, write: Vec<u8>, read: &mut [u8]) -> Result<(), FtdiError> {
+        block_on(self.async_write_read(write, read))
     }
 }

@@ -89,6 +89,13 @@ impl FtdiMpsse {
         let handle = handle.detach_and_claim_interface(interface.interface_number())?;
 
         let context = FtdiContext::new(handle, interface, max_packet_size).into_mpsse(0)?;
+        let this = Self {
+            ft: context,
+            interface,
+            chip_type,
+            lower: Default::default(),
+            upper: Default::default(),
+        };
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(0, 0) // set all pin to input and value 0;
             .set_gpio_upper(0, 0) // set all pin to input and value 0;
@@ -100,15 +107,9 @@ impl FtdiMpsse {
                 .enable_adaptive_clocking(false)
                 .set_clock(0, Some(false));
         }
-        context.write_read(cmd.as_slice(), &mut [])?;
+        this.exec(cmd)?;
 
-        Ok(Self {
-            ft: context,
-            interface,
-            chip_type,
-            lower: Default::default(),
-            upper: Default::default(),
-        })
+        Ok(this)
     }
 
     /// Sets the MPSSE clock frequency
@@ -149,9 +150,9 @@ impl FtdiMpsse {
     }
     /// Write mpsse command and read response
     pub(crate) fn exec(&self, cmd: impl Into<MpsseCmdBuilder>) -> Result<Vec<u8>, FtdiError> {
-        let mut cmd: MpsseCmdBuilder = cmd.into();
-        let mut response = vec![0; cmd.read_len()];
-        self.ft.write_read(cmd.as_slice(), &mut response)?;
+        let cmd: MpsseCmdBuilder = cmd.into();
+        let (cmd, mut response) = cmd.destruct();
+        self.ft.write_read(cmd, &mut response)?;
         Ok(response)
     }
     /// Allocate a pin for a specific use.
