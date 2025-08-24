@@ -1,7 +1,7 @@
 use crate::{
     FtdiError, Pin,
     gpio::UsedPin,
-    mpsse::{FtdiMpsse, PinUse},
+    mpsse::{FtdiMpsse, PinUsage},
     mpsse_cmd::MpsseCmdBuilder,
 };
 use eh1::spi::{Error, ErrorKind, ErrorType, MODE_0, MODE_2, Mode, Operation, SpiBus, SpiDevice};
@@ -51,9 +51,9 @@ impl FtdiSpi {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::Spi)?,
             ],
             mtx: mtx.clone(),
             tck_init_value: false,
@@ -170,9 +170,9 @@ impl FtdiSpiHalfduplex {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::Spi)?,
             ],
             mtx: mtx.clone(),
             tck_init_value: false,
@@ -265,10 +265,10 @@ impl FtdiSpiDevice {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Spi)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUsage::Spi)?,
             ],
             mtx: mtx.clone(),
             tck_init_value: false,

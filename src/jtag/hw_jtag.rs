@@ -1,7 +1,7 @@
 use crate::{
     ChipType, FtdiError, Pin,
     gpio::{FtdiOutputPin, UsedPin},
-    mpsse::{FtdiMpsse, PinUse},
+    mpsse::{FtdiMpsse, PinUsage},
     mpsse_cmd::MpsseCmdBuilder,
 };
 use eh1::digital::OutputPin;
@@ -54,10 +54,10 @@ impl FtdiJtag {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Jtag)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Jtag)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Jtag)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUse::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::Jtag)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(3), PinUsage::Jtag)?,
             ],
             mtx: mtx.clone(),
             adaptive_clocking_pin: None,
@@ -99,8 +99,11 @@ impl FtdiJtag {
         }
         if state {
             log::info!("Use {:?} as RTCK.", Pin::Lower(7));
-            self.adaptive_clocking_pin =
-                Some(UsedPin::new(self.mtx.clone(), Pin::Lower(7), PinUse::Jtag)?);
+            self.adaptive_clocking_pin = Some(UsedPin::new(
+                self.mtx.clone(),
+                Pin::Lower(7),
+                PinUsage::Jtag,
+            )?);
         } else {
             log::info!("Free {:?}.", Pin::Lower(7));
             self.adaptive_clocking_pin = None;

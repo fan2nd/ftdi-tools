@@ -4,7 +4,7 @@ use self::cmd::SwdCmdBuilder;
 use crate::{
     FtdiError, Pin,
     gpio::UsedPin,
-    mpsse::{FtdiMpsse, PinUse},
+    mpsse::{FtdiMpsse, PinUsage},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -62,9 +62,9 @@ impl FtdiSwd {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSwdError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::Swd)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::Swd)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::Swd)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Swd)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Swd)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::Swd)?,
             ],
             mtx,
             direction_pin: None,
@@ -72,7 +72,7 @@ impl FtdiSwd {
         Ok(this)
     }
     pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiSwdError> {
-        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::Swd)?);
+        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUsage::Swd)?);
         let mut lock = self.mtx.lock().unwrap();
         match self.direction_pin.as_deref().unwrap() {
             Pin::Lower(_) => {

@@ -1,7 +1,7 @@
 use crate::{ChipType, FtdiError, Interface, Pin, ftdaye::FtdiContext, mpsse_cmd::MpsseCmdBuilder};
 /// State tracker for each pin on the FTDI chip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PinUse {
+pub enum PinUsage {
     Output,
     Input,
     I2c,
@@ -18,7 +18,7 @@ pub(crate) struct GpioByte {
     /// Current logic level (0 = low, 1 = high) for each output pin
     pub(crate) value: u8,
     /// Protocol allocation status for each pin (prevents conflicting usage)
-    pins: [Option<PinUse>; 8],
+    pins: [Option<PinUsage>; 8],
 }
 
 /// Main FTDI MPSSE (Multi-Protocol Synchronous Serial Engine) controller
@@ -146,15 +146,15 @@ impl FtdiMpsse {
     }
     /// Write mpsse command and read response
     pub(crate) fn exec(&self, cmd: impl Into<MpsseCmdBuilder>) -> Result<Vec<u8>, FtdiError> {
-        let cmd: MpsseCmdBuilder = cmd.into();
+        let cmd = cmd.into();
         let (cmd, mut response) = cmd.destruct();
         self.ft.write_read(cmd, &mut response)?;
         Ok(response)
     }
     /// Allocate a pin for a specific use.
-    pub(crate) fn alloc_pin(&mut self, pin: Pin, usage: PinUse) -> Result<(), FtdiError> {
+    pub(crate) fn alloc_pin(&mut self, pin: Pin, usage: PinUsage) -> Result<(), FtdiError> {
         if !self.chip_type.mpsse_list().contains(&self.interface)
-            && (usage != PinUse::Input || usage != PinUse::Output)
+            && (usage != PinUsage::Input || usage != PinUsage::Output)
         {
             return Err(FtdiError::PinFault(format!(
                 "{:?} Interface::{:?} can not be used for {usage:?}",

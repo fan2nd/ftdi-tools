@@ -1,6 +1,6 @@
 use crate::{
     FtdiError, Pin,
-    mpsse::{FtdiMpsse, PinUse},
+    mpsse::{FtdiMpsse, PinUsage},
     mpsse_cmd::MpsseCmdBuilder,
 };
 use std::{
@@ -30,7 +30,7 @@ impl UsedPin {
     pub(crate) fn new(
         mtx: Arc<Mutex<FtdiMpsse>>,
         pin: Pin,
-        usage: PinUse,
+        usage: PinUsage,
     ) -> Result<Self, FtdiError> {
         {
             let mut lock = mtx.lock().unwrap();
@@ -54,7 +54,7 @@ impl FtdiOutputPin {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
         let this = Self {
             mtx: mtx.clone(),
-            pin: UsedPin::new(mtx.clone(), pin, PinUse::Output)?,
+            pin: UsedPin::new(mtx.clone(), pin, PinUsage::Output)?,
         };
         {
             let mut lock = mtx.lock().unwrap();
@@ -137,7 +137,7 @@ impl FtdiInputPin {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>, pin: Pin) -> Result<Self, FtdiError> {
         let this = Self {
             mtx: mtx.clone(),
-            pin: UsedPin::new(mtx.clone(), pin, PinUse::Input)?,
+            pin: UsedPin::new(mtx.clone(), pin, PinUsage::Input)?,
         };
         let mut lock = mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();

@@ -2,7 +2,7 @@ use self::cmd::I2cCmdBuilder;
 use crate::{
     ChipType, FtdiError, Pin,
     gpio::UsedPin,
-    mpsse::{FtdiMpsse, PinUse},
+    mpsse::{FtdiMpsse, PinUsage},
     mpsse_cmd::MpsseCmdBuilder,
 };
 use eh1::i2c::{ErrorKind, NoAcknowledgeSource, Operation, SevenBitAddress};
@@ -47,9 +47,9 @@ impl FtdiI2c {
     pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiI2cError> {
         let this = Self {
             _pins: [
-                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUse::I2c)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUse::I2c)?,
-                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUse::I2c)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::I2c)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::I2c)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(2), PinUsage::I2c)?,
             ],
             mtx: mtx.clone(),
             start_stop_cmds: 3,
@@ -70,7 +70,7 @@ impl FtdiI2c {
     }
 
     pub fn set_direction_pin(&mut self, pin: Pin) -> Result<(), FtdiI2cError> {
-        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUse::I2c)?);
+        self.direction_pin = Some(UsedPin::new(self.mtx.clone(), pin, PinUsage::I2c)?);
         let mut lock = self.mtx.lock().unwrap();
         match self.direction_pin.as_deref().unwrap() {
             Pin::Lower(_) => {
@@ -126,7 +126,7 @@ impl FtdiI2c {
         cmd.start(self.start_stop_cmds);
         lock.exec(cmd)?;
 
-        let mut prev_op_was_a_read: bool = false;
+        let mut prev_op_was_a_read = false;
         for (op_idx, operation) in operations.iter_mut().enumerate() {
             match operation {
                 Operation::Read(buffer) => {
@@ -148,9 +148,9 @@ impl FtdiI2c {
                     let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
                     for idx in 0..buffer.len() {
                         if idx == buffer.len() - 1 {
-                            cmd.i2c_read(false); // NMAK: Master Not Ack
+                            cmd.i2c_read_byte(false); // NMAK: Master Not Ack
                         } else {
-                            cmd.i2c_read(true); // MAK: Master Ack
+                            cmd.i2c_read_byte(true); // MAK: Master Ack
                         }
                     }
                     let response = lock.exec(cmd)?;
@@ -175,7 +175,7 @@ impl FtdiI2c {
                     }
                     for idx in 0..bytes.len() {
                         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
-                        cmd.i2c_write(bytes[idx]);
+                        cmd.i2c_write_byte(bytes[idx]);
                         let response = lock.exec(cmd)?;
                         if (response[0] & Self::SLAVE_ACK_MASK) == Self::SLAVE_NOT_ACK
                             && idx != bytes.len() - 1
@@ -211,7 +211,7 @@ impl FtdiI2c {
         let mut cmd = I2cCmdBuilder::new(&lock, self.direction_pin.as_deref());
         cmd.start(self.start_stop_cmds);
 
-        let mut prev_op_was_a_read: bool = false;
+        let mut prev_op_was_a_read = false;
         for (idx, operation) in operations.iter_mut().enumerate() {
             match operation {
                 Operation::Read(buffer) => {
@@ -223,9 +223,9 @@ impl FtdiI2c {
                     }
                     for idx in 0..buffer.len() {
                         if idx == buffer.len() - 1 {
-                            cmd.i2c_read(false);
+                            cmd.i2c_read_byte(false);
                         } else {
-                            cmd.i2c_read(true);
+                            cmd.i2c_read_byte(true);
                         }
                     }
                     prev_op_was_a_read = true;
@@ -238,7 +238,7 @@ impl FtdiI2c {
                         cmd.i2c_addr(address, false);
                     }
                     for &byte in *bytes {
-                        cmd.i2c_write(byte);
+                        cmd.i2c_write_byte(byte);
                     }
                     prev_op_was_a_read = false;
                 }
@@ -248,7 +248,7 @@ impl FtdiI2c {
         let response = lock.exec(cmd)?;
 
         // parse response
-        let mut prev_op_was_a_read: bool = false;
+        prev_op_was_a_read = false;
         let mut response_idx = 0;
         for (op_idx, operation) in operations.iter_mut().enumerate() {
             match operation {
@@ -260,10 +260,8 @@ impl FtdiI2c {
                         }
                         response_idx += 1;
                     }
-                    for idx in 0..buffer.len() {
-                        buffer[idx] = response[response_idx];
-                        response_idx += 1;
-                    }
+                    buffer.copy_from_slice(&response[response_idx..response_idx + buffer.len()]);
+                    response_idx += buffer.len();
                     prev_op_was_a_read = true;
                 }
                 Operation::Write(bytes) => {
@@ -432,7 +430,7 @@ mod cmd {
                 .clock_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
             self
         }
-        pub(super) fn i2c_read(&mut self, m_ack: bool) -> &mut Self {
+        pub(super) fn i2c_read_byte(&mut self, m_ack: bool) -> &mut Self {
             let m_ack = if m_ack { 0 } else { 0xff };
             self.i2c_in()
                 .cmd
@@ -442,7 +440,7 @@ mod cmd {
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, m_ack, ACK_BITS);
             self
         }
-        pub(super) fn i2c_write(&mut self, value: u8) -> &mut Self {
+        pub(super) fn i2c_write_byte(&mut self, value: u8) -> &mut Self {
             self.i2c_out(false, false)
                 .cmd
                 .clock_bits_out(TCK_INIT_VALUE, IS_LSB, value, DATA_BITS);
