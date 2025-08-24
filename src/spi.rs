@@ -325,15 +325,15 @@ impl SpiDevice<u8> for FtdiSpiDevice {
         operations.iter_mut().for_each(|op| {
             len += match op {
                 Operation::Read(x) => {
-                    x.copy_from_slice(&response[len..x.len()]);
+                    x.copy_from_slice(&response[len..len + x.len()]);
                     x.len()
                 }
                 Operation::Transfer(x, _) => {
-                    x.copy_from_slice(&response[len..x.len()]);
+                    x.copy_from_slice(&response[len..len + x.len()]);
                     x.len()
                 }
                 Operation::TransferInPlace(x) => {
-                    x.copy_from_slice(&response[len..x.len()]);
+                    x.copy_from_slice(&response[len..len + x.len()]);
                     x.len()
                 }
                 _ => 0,
