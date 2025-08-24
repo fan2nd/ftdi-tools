@@ -99,11 +99,11 @@ fn main() -> anyhow::Result<()> {
 
     // 创建 GPIO 输出引脚用于控制 Flash 的片选 (CS) 信号
     // Pin::Lower(3) 对应 FTDI AD3 引脚
-    let gpio = FtdiOutputPin::new(mtx, Pin::Lower(3))?;
+    let cs = FtdiOutputPin::new(mtx.clone(), Pin::Lower(3))?;
 
     // 创建 SPI 设备实例，结合 SPI 总线和片选控制
     // RefCellDevice::new_no_delay 创建一个没有延时的 SPI 设备实例
-    let mut flash_device = FlashDevice(RefCellDevice::new_no_delay(&spi, gpio)?);
+    let mut flash_device = FlashDevice(RefCellDevice::new_no_delay(&spi, cs)?);
 
     // 初始化 Flash 存储器接口
     let mut flash = Flash::new(&mut flash_device);

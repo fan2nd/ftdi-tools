@@ -43,6 +43,7 @@ pub enum ChipType {
     FT4232H,
     FT232H,
     FT230X,
+    Unknown,
 }
 impl ChipType {
     pub(crate) const fn interface_list(self) -> &'static [Interface] {
@@ -73,6 +74,13 @@ impl ChipType {
             ChipType::FT2232D => (6_000_000, None),
             ChipType::FT232H | ChipType::FT2232H | ChipType::FT4232H => (30_000_000, Some(false)),
             _ => (0, None),
+        }
+    }
+    pub(crate) const fn max_packet_size(self) -> usize {
+        match self {
+            ChipType::FT2232D => 64,
+            ChipType::FT232H | ChipType::FT2232H | ChipType::FT4232H => 512,
+            _ => 64,
         }
     }
 }
@@ -128,11 +136,6 @@ impl Pin {
 #[derive(Debug, thiserror::Error)]
 pub enum FtdiError {
     #[error("A USB transport error occurred.")]
-    ///
-    /// This variant is used for all errors reported by the operating system when performing a USB
-    /// operation. It may indicate that the USB device was unplugged, that another application or an
-    /// operating system driver is currently using it, or that the current user does not have
-    /// permission to access it.
     Usb(#[from] std::io::Error),
 
     #[error("Open failed: {0}")]
@@ -146,28 +149,8 @@ pub enum FtdiError {
     #[error("Bad Mpsse Command: {0:#x}")]
     BadMpsseCommand(u8),
 
-    #[error("{chip:?} Interface::{interface:?} do not has {pin:?}")]
-    PinNotVaild {
-        chip: ChipType,
-        interface: Interface,
-        pin: Pin,
-    },
-
-    #[error(
-        "Unable to allocate pin {pin:?} for {purpose:?}, pin is already allocated for {current:?}"
-    )]
-    PinInUsed {
-        pin: Pin,
-        purpose: mpsse::PinUse,
-        current: mpsse::PinUse,
-    },
-
-    #[error("{chip:?} Interface::{interface:?} can not be used for {usage:?}")]
-    IncorrectUsage {
-        chip: ChipType,
-        interface: Interface,
-        usage: mpsse::PinUse,
-    },
+    #[error("Pin fault: {0}")]
+    PinFault(String),
 
     #[error("{0}")]
     Other(&'static str),

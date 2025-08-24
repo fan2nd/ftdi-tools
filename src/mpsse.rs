@@ -48,20 +48,20 @@ impl FtdiMpsse {
     /// Result containing FtdiMpsse instance or FtdiError
     pub fn open(usb_device: &nusb::DeviceInfo, interface: Interface) -> Result<Self, FtdiError> {
         let handle = usb_device.open()?;
-        let max_packet_size = handle
-            .active_configuration()
-            .map_err(|e| FtdiError::Usb(e.into()))?
-            .interface_alt_settings()
-            .next()
-            .ok_or(FtdiError::OpenFailed(
-                "Failed to get interface info".to_string(),
-            ))?
-            .endpoints()
-            .next()
-            .ok_or(FtdiError::OpenFailed(
-                "Failed to get endpoint info".to_string(),
-            ))?
-            .max_packet_size();
+        // let max_packet_size = handle
+        //     .active_configuration()
+        //     .map_err(|e| FtdiError::Usb(e.into()))?
+        //     .interface_alt_settings()
+        //     .next()
+        //     .ok_or(FtdiError::OpenFailed(
+        //         "Failed to get interface info".to_string(),
+        //     ))?
+        //     .endpoints()
+        //     .next()
+        //     .ok_or(FtdiError::OpenFailed(
+        //         "Failed to get endpoint info".to_string(),
+        //     ))?
+        //     .max_packet_size();
         let chip_type = match (
             usb_device.device_version(),
             usb_device.serial_number().unwrap_or(""),
@@ -74,11 +74,7 @@ impl FtdiMpsse {
             (0x800, _) => ChipType::FT4232H,
             (0x900, _) => ChipType::FT232H,
             (0x1000, _) => return Err(FtdiError::UnsupportedChip(ChipType::FT230X)),
-            (version, _) => {
-                return Err(FtdiError::OpenFailed(format!(
-                    "Unknown ChipType version:0x{version:x}"
-                )));
-            }
+            _ => return Err(FtdiError::UnsupportedChip(ChipType::Unknown)),
         };
         if !chip_type.interface_list().contains(&interface) {
             return Err(FtdiError::OpenFailed(format!(
@@ -88,14 +84,14 @@ impl FtdiMpsse {
 
         let handle = handle.detach_and_claim_interface(interface.interface_number())?;
 
-        let context = FtdiContext::new(handle, interface, max_packet_size).into_mpsse(0)?;
         let this = Self {
-            ft: context,
+            ft: FtdiContext::new(handle, interface, chip_type.max_packet_size()).into_mpsse(0)?,
             interface,
             chip_type,
             lower: Default::default(),
             upper: Default::default(),
         };
+
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(0, 0) // set all pin to input and value 0;
             .set_gpio_upper(0, 0) // set all pin to input and value 0;
@@ -160,40 +156,35 @@ impl FtdiMpsse {
         if !self.chip_type.mpsse_list().contains(&self.interface)
             && (usage != PinUse::Input || usage != PinUse::Output)
         {
-            return Err(FtdiError::IncorrectUsage {
-                chip: self.chip_type,
-                interface: self.interface,
-                usage,
-            });
+            return Err(FtdiError::PinFault(format!(
+                "{:?} Interface::{:?} can not be used for {usage:?}",
+                self.chip_type, self.interface
+            )));
         };
         let (byte, idx) = match pin {
             Pin::Lower(idx) => {
                 if idx >= 8 {
-                    return Err(FtdiError::PinNotVaild {
-                        chip: self.chip_type,
-                        interface: self.interface,
-                        pin,
-                    });
+                    return Err(FtdiError::PinFault(format!(
+                        "{:?} Interface::{:?} do not has {pin:?}",
+                        self.chip_type, self.interface
+                    )));
                 };
                 (&mut self.lower, idx)
             }
             Pin::Upper(idx) => {
                 if idx >= self.chip_type.upper_pins() {
-                    return Err(FtdiError::PinNotVaild {
-                        chip: self.chip_type,
-                        interface: self.interface,
-                        pin,
-                    });
+                    return Err(FtdiError::PinFault(format!(
+                        "{:?} Interface::{:?} do not has {pin:?}",
+                        self.chip_type, self.interface
+                    )));
                 }
                 (&mut self.upper, idx)
             }
         };
         if let Some(current) = byte.pins[idx] {
-            return Err(FtdiError::PinInUsed {
-                pin,
-                purpose: usage,
-                current,
-            });
+            return Err(FtdiError::PinFault(format!(
+                "Unable to allocate pin {pin:?} for {usage:?}, pin is already allocated for {current:?}"
+            )));
         } else {
             log::trace!("pin {:?} has been alloced for {:?}", pin, usage);
             byte.pins[idx] = Some(usage)
