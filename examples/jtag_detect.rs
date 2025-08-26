@@ -65,7 +65,7 @@ fn main() -> anyhow::Result<()> {
 
         // 创建 TDO 检测器实例
         // 这个检测器会尝试在指定的 TCK/TMS 组合下查找 TDO 信号
-        jtag.set_pins(tck, tms)?;
+        jtag.set_pins(tck, tms);
 
         // 注意: 在实际应用中，这里可以添加控制电平转换芯片的代码
         // 例如设置 TCK 和 TMS 为输出，其他引脚为输入
@@ -94,7 +94,7 @@ fn main() -> anyhow::Result<()> {
 
             // 创建 TDI 检测器实例
             // 这个检测器会测试完整的 JTAG 引脚配置
-            jtag.set_pins(tck, tdi, tdo, tms)?;
+            jtag.set_pins(tck, tdi, tdo, tms);
 
             // 执行两次不同的扫描测试
             let ids_scan1 = jtag.scan_with(true)?; // 使用逻辑 1 进行扫描
