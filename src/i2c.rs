@@ -424,29 +424,29 @@ mod cmd {
         pub(super) fn i2c_addr(&mut self, addr: u8, is_read: bool) -> &mut Self {
             let addr = if is_read { (addr << 1) | 1 } else { addr << 1 };
             self.cmd
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, addr, DATA_BITS);
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, addr, DATA_BITS);
             self.i2c_in()
                 .cmd
-                .clock_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
+                .shift_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
             self
         }
         pub(super) fn i2c_read_byte(&mut self, m_ack: bool) -> &mut Self {
             let m_ack = if m_ack { 0 } else { 0xff };
             self.i2c_in()
                 .cmd
-                .clock_bits_in(TCK_INIT_VALUE, IS_LSB, DATA_BITS);
+                .shift_bits_in(TCK_INIT_VALUE, IS_LSB, DATA_BITS);
             self.i2c_out(false, false)
                 .cmd
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, m_ack, ACK_BITS);
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, m_ack, ACK_BITS);
             self
         }
         pub(super) fn i2c_write_byte(&mut self, value: u8) -> &mut Self {
             self.i2c_out(false, false)
                 .cmd
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, value, DATA_BITS);
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, value, DATA_BITS);
             self.i2c_in()
                 .cmd
-                .clock_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
+                .shift_bits_in(TCK_INIT_VALUE, IS_LSB, ACK_BITS);
             self
         }
     }

@@ -103,7 +103,7 @@ impl ErrorType for FtdiSpi {
 impl SpiBus<u8> for FtdiSpi {
     fn read(&mut self, words: &mut [u8]) -> Result<(), Self::Error> {
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, words.len());
+        cmd.shift_bytes_in(self.tck_init_value, self.is_lsb, words.len());
 
         let lock = self.mtx.lock().unwrap();
         let response = lock.exec(cmd)?;
@@ -114,7 +114,7 @@ impl SpiBus<u8> for FtdiSpi {
 
     fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, words);
+        cmd.shift_bytes_out(self.tck_init_value, self.is_lsb, words);
 
         let lock = self.mtx.lock().unwrap();
         lock.exec(cmd)?;
@@ -128,7 +128,7 @@ impl SpiBus<u8> for FtdiSpi {
 
     fn transfer_in_place(&mut self, words: &mut [u8]) -> Result<(), Self::Error> {
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.clock_bytes(self.tck_init_value, self.is_lsb, words);
+        cmd.shift_bytes(self.tck_init_value, self.is_lsb, words);
 
         let lock = self.mtx.lock().unwrap();
 
@@ -140,7 +140,7 @@ impl SpiBus<u8> for FtdiSpi {
 
     fn transfer(&mut self, read: &mut [u8], write: &[u8]) -> Result<(), Self::Error> {
         let mut cmd = MpsseCmdBuilder::new();
-        cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
+        cmd.shift_bytes(self.tck_init_value, self.is_lsb, write);
 
         let lock = self.mtx.lock().unwrap();
         let response = lock.exec(cmd)?;
@@ -224,7 +224,7 @@ impl SpiBus for FtdiSpiHalfduplex {
         let lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction & (!MOSI_MASK)); // set tdi to input
-        cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, words.len());
+        cmd.shift_bytes_in(self.tck_init_value, self.is_lsb, words.len());
 
         let response = lock.exec(cmd)?;
         words.copy_from_slice(&response);
@@ -235,7 +235,7 @@ impl SpiBus for FtdiSpiHalfduplex {
         let lock = self.mtx.lock().unwrap();
         let mut cmd = MpsseCmdBuilder::new();
         cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
-        cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, words);
+        cmd.shift_bytes_out(self.tck_init_value, self.is_lsb, words);
 
         lock.exec(cmd)?;
 
@@ -305,16 +305,16 @@ impl SpiDevice<u8> for FtdiSpiDevice {
         );
         operations.iter().for_each(|op| match op {
             Operation::Read(read) => {
-                cmd.clock_bytes_in(self.tck_init_value, self.is_lsb, read.len());
+                cmd.shift_bytes_in(self.tck_init_value, self.is_lsb, read.len());
             }
             Operation::Write(write) => {
-                cmd.clock_bytes_out(self.tck_init_value, self.is_lsb, write);
+                cmd.shift_bytes_out(self.tck_init_value, self.is_lsb, write);
             }
             Operation::Transfer(_, write) => {
-                cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
+                cmd.shift_bytes(self.tck_init_value, self.is_lsb, write);
             }
             Operation::TransferInPlace(write) => {
-                cmd.clock_bytes(self.tck_init_value, self.is_lsb, write);
+                cmd.shift_bytes(self.tck_init_value, self.is_lsb, write);
             }
             Operation::DelayNs(_) => (),
         });

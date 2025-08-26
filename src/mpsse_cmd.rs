@@ -122,8 +122,6 @@ impl MpsseShiftCmd {
 /// command `[u8; N]` arrays at compile-time.
 ///
 /// [FTDI MPSSE Basics]: https://www.ftdichip.com/Support/Documents/AppNotes/AN_135_MPSSE_Basics.pdf
-/// [`send`]: MpsseCmdExecutor::send
-/// [`xfer`]: MpsseCmdExecutor::xfer
 const MAX_BYTES_SHIFT: usize = 65536;
 const MAX_BITS_SHIFT: usize = 8;
 const MAX_TMS_SHIFT: usize = 7;
@@ -309,18 +307,18 @@ impl MpsseCmdBuilder {
     /// No data is clocked into the device on TDO/DI.
     ///
     /// This will panic for data lengths greater than `u16::MAX + 1`.
-    pub(crate) fn clock_bytes_out(
+    pub(crate) fn shift_bytes_out(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
         data: &[u8],
     ) -> &mut Self {
         for slice in data.chunks(MAX_BYTES_SHIFT) {
-            self.clock_bytes_out_limited(tck_init_value, is_lsb, slice);
+            self.shift_bytes_out_limited(tck_init_value, is_lsb, slice);
         }
         self
     }
-    fn clock_bytes_out_limited(
+    fn shift_bytes_out_limited(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
@@ -354,20 +352,20 @@ impl MpsseCmdBuilder {
     /// * `mode` - Data clocking mode.
     /// * `len` - Number of bytes to clock in.
     ///   This will panic for values greater than `u16::MAX + 1`.
-    pub(crate) fn clock_bytes_in(
+    pub(crate) fn shift_bytes_in(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
         mut len: usize,
     ) -> &mut Self {
         while len >= MAX_BYTES_SHIFT {
-            self.clock_bytes_in_limited(tck_init_value, is_lsb, MAX_BYTES_SHIFT);
+            self.shift_bytes_in_limited(tck_init_value, is_lsb, MAX_BYTES_SHIFT);
             len -= MAX_BYTES_SHIFT;
         }
-        self.clock_bytes_in_limited(tck_init_value, is_lsb, len);
+        self.shift_bytes_in_limited(tck_init_value, is_lsb, len);
         self
     }
-    fn clock_bytes_in_limited(
+    fn shift_bytes_in_limited(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
@@ -393,18 +391,18 @@ impl MpsseCmdBuilder {
     /// Clock data in and out simultaneously.
     ///
     /// This will panic for data lengths greater than `u16::MAX + 1`.
-    pub(crate) fn clock_bytes(
+    pub(crate) fn shift_bytes(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
         data: &[u8],
     ) -> &mut Self {
         for slice in data.chunks(MAX_BYTES_SHIFT) {
-            self.clock_bytes_limited(tck_init_value, is_lsb, slice);
+            self.shift_bytes_limited(tck_init_value, is_lsb, slice);
         }
         self
     }
-    fn clock_bytes_limited(
+    fn shift_bytes_limited(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
@@ -437,7 +435,7 @@ impl MpsseCmdBuilder {
     /// * `data` - Data bits.
     /// * `len` - Number of bits to clock out.
     ///   This will panic for values greater than 8.
-    pub(crate) fn clock_bits_out(
+    pub(crate) fn shift_bits_out(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
@@ -463,7 +461,7 @@ impl MpsseCmdBuilder {
     /// * `mode` - Bit clocking mode.
     /// * `len` - Number of bits to clock in.
     ///   This will panic for values greater than 8.
-    pub(crate) fn clock_bits_in(
+    pub(crate) fn shift_bits_in(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,
@@ -488,7 +486,7 @@ impl MpsseCmdBuilder {
     /// * `mode` - Bit clocking mode.
     /// * `len` - Number of bits to clock in.
     ///   This will panic for values greater than 8.
-    pub(crate) fn clock_bits(
+    pub(crate) fn shift_bits(
         &mut self,
         tck_init_value: bool,
         is_lsb: bool,

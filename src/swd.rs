@@ -259,7 +259,7 @@ mod cmd {
         pub(super) fn trn(&mut self) -> &mut Self {
             self.swd_in()
                 .cmd
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, 0xff, 1);
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, 0xff, 1);
             self
         }
         pub(super) fn swd_line_reset(&mut self) -> &mut Self {
@@ -267,10 +267,10 @@ mod cmd {
             const ZEOS: u8 = 0;
             self.swd_out()
                 .cmd
-                .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones (LSB first)
+                .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones (LSB first)
                 // AdiV5.2-B4.3.3
                 // A line reset is achieved by holding the data signal HIGH for at least 50 clock cycles, followed by at least two idle cycles.
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, ZEOS, 2); // >2 zeros (LSB first)
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, ZEOS, 2); // >2 zeros (LSB first)
             self
         }
         pub(super) fn swd_enable(&mut self) -> &mut Self {
@@ -281,22 +281,22 @@ mod cmd {
             const SEQUENCE: &[u8] = &0xE79E_u16.to_le_bytes();
             self.swd_out()
                 .cmd
-                .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones
-                .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, SEQUENCE);
+                .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, ONES) // >50 ones
+                .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, SEQUENCE);
             self.swd_line_reset();
             self
         }
         pub(super) fn swd_send_request(&mut self, request: u8) -> &mut Self {
             self.swd_out()
                 .cmd
-                .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &[request]); // // Send request
+                .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, &[request]); // // Send request
             self
         }
         pub(super) fn swd_read_response(&mut self) -> &mut Self {
             const RESPONSE_BITS: usize = 3;
             self.swd_in()
                 .cmd
-                .clock_bits_in(TCK_INIT_VALUE, IS_LSB, RESPONSE_BITS);
+                .shift_bits_in(TCK_INIT_VALUE, IS_LSB, RESPONSE_BITS);
             self
         }
         pub(super) fn swd_read_data(&mut self) -> &mut Self {
@@ -304,8 +304,8 @@ mod cmd {
             const PARITY_BITS: usize = 1;
             self.swd_in()
                 .cmd
-                .clock_bytes_in(TCK_INIT_VALUE, IS_LSB, DATA_BYTES)
-                .clock_bits_in(TCK_INIT_VALUE, IS_LSB, PARITY_BITS);
+                .shift_bytes_in(TCK_INIT_VALUE, IS_LSB, DATA_BYTES)
+                .shift_bits_in(TCK_INIT_VALUE, IS_LSB, PARITY_BITS);
             self
         }
         pub(super) fn swd_write_data(&mut self, value: u32) -> &mut Self {
@@ -314,8 +314,8 @@ mod cmd {
             let parity = (value.count_ones() & 0x01) as u8;
             self.swd_out()
                 .cmd
-                .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &bytes)
-                .clock_bits_out(TCK_INIT_VALUE, IS_LSB, parity, PARITY_BITS);
+                .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, &bytes)
+                .shift_bits_out(TCK_INIT_VALUE, IS_LSB, parity, PARITY_BITS);
             self
         }
     }

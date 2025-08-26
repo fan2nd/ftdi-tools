@@ -160,7 +160,7 @@ impl FtdiJtag {
 
         'outer: loop {
             let mut cmd = MpsseCmdBuilder::new();
-            cmd.clock_bytes(TCK_INIT_VALUE, IS_LSB, &tdi);
+            cmd.shift_bytes(TCK_INIT_VALUE, IS_LSB, &tdi);
             let response = lock.exec(cmd)?;
             let tdos: Vec<_> = response
                 .iter()
@@ -297,8 +297,8 @@ impl JtagCmdBuilder {
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = data[bytes_count] >> remain_bits == 1;
         self.0
-            .clock_bytes(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
-            .clock_bits(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
+            .shift_bytes(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
+            .shift_bits(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
             .clock_tms(last_bit, 0b0000_0001, 1);
         self
     }
@@ -308,8 +308,8 @@ impl JtagCmdBuilder {
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = data[bytes_count] >> remain_bits == 1;
         self.0
-            .clock_bytes_out(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
-            .clock_bits_out(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
+            .shift_bytes_out(TCK_INIT_VALUE, IS_LSB, &data[0..bytes_count])
+            .shift_bits_out(TCK_INIT_VALUE, IS_LSB, data[bytes_count], remain_bits)
             .clock_tms_out(last_bit, 0b0000_0001, 1);
         self
     }
@@ -319,8 +319,8 @@ impl JtagCmdBuilder {
         let remain_bits = (bits_count - 1) & 0b111;
         let last_bit = Default::default(); // the last bit of tdi when shift2exit
         self.0
-            .clock_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
-            .clock_bits_in(TCK_INIT_VALUE, IS_LSB, remain_bits)
+            .shift_bytes_in(TCK_INIT_VALUE, IS_LSB, bytes_count)
+            .shift_bits_in(TCK_INIT_VALUE, IS_LSB, remain_bits)
             .clock_tms(last_bit, 0b0000_0001, 1);
         self
     }
