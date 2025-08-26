@@ -58,13 +58,14 @@ fn main() -> anyhow::Result<()> {
     // 阶段1: TDO 检测阶段
     // =========================
     // 遍历所有可能的 TCK 和 TMS 引脚组合 (8 个引脚中选择 2 个的排列)
+    let mut jtag = JtagDetectTdo::new(mpsse);
     for couple in (0..8).permutations(2) {
         let tck = couple[0]; // TCK (测试时钟) 引脚编号
         let tms = couple[1]; // TMS (测试模式选择) 引脚编号
 
         // 创建 TDO 检测器实例
         // 这个检测器会尝试在指定的 TCK/TMS 组合下查找 TDO 信号
-        let jtag = JtagDetectTdo::new(&mpsse, tck, tms)?;
+        jtag.set_pins(tck, tms)?;
 
         // 注意: 在实际应用中，这里可以添加控制电平转换芯片的代码
         // 例如设置 TCK 和 TMS 为输出，其他引脚为输入
@@ -79,6 +80,7 @@ fn main() -> anyhow::Result<()> {
     // 阶段2: TDI 检测阶段
     // =========================
     // 遍历第一阶段找到的所有可能的 TCK/TMS/TDO 组合
+    let mut jtag = JtagDetectTdi::new(jtag);
     for (tck, tms, tdo) in notdi {
         // 注意: 在实际应用中，这里可以添加控制电平转换芯片的代码
         // 例如设置 TDO 为输入，其他引脚为输出
@@ -92,7 +94,7 @@ fn main() -> anyhow::Result<()> {
 
             // 创建 TDI 检测器实例
             // 这个检测器会测试完整的 JTAG 引脚配置
-            let jtag = JtagDetectTdi::new(&mpsse, tck, tdi, tdo, tms)?;
+            jtag.set_pins(tck, tdi, tdo, tms)?;
 
             // 执行两次不同的扫描测试
             let ids_scan1 = jtag.scan_with(true)?; // 使用逻辑 1 进行扫描
