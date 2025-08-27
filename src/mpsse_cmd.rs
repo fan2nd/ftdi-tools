@@ -76,20 +76,20 @@ impl MpsseShiftCmd {
         tck_init_value: bool,
         is_bit_mode: bool,
         is_lsb: bool,
-        tdi_write: bool,
-        tdo_read: bool,
+        is_tdi_write: bool,
+        is_tdo_read: bool,
     ) -> u8 {
         assert!(
-            tdi_write | tdo_read,
+            is_tdi_write | is_tdo_read,
             "tdi_write and tdo_read can not be false tonight"
         );
         MpsseShiftCmd::new()
-            .with_is_tdi_neg_write((!tck_init_value) && tdi_write)
+            .with_is_tdi_neg_write((!tck_init_value) && is_tdi_write)
             .with_is_bit_mode(is_bit_mode)
-            .with_is_tdo_neg_read(tck_init_value && tdo_read)
+            .with_is_tdo_neg_read(tck_init_value && is_tdo_read)
             .with_is_lsb(is_lsb)
-            .with_is_tdi_write(tdi_write)
-            .with_is_tdo_read(tdo_read)
+            .with_is_tdi_write(is_tdi_write)
+            .with_is_tdo_read(is_tdo_read)
             .into()
     }
     fn _tms_shift(tck_init_value: bool, tdo_neg_read: bool, tdo_read: bool) -> u8 {
