@@ -22,6 +22,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod delay;
 mod ftdaye;
 pub mod gpio;
 pub mod i2c;

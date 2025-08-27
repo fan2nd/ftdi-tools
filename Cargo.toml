@@ -13,9 +13,11 @@ thiserror = "2.0.12"
 
 [dev-dependencies]
 anyhow = "1.0.98"
+embedded-graphics = "0.8.1"
 embedded-hal-bus = "0.3.0"
 env_logger = "0.11.8"
 itertools = "0.14.0"
 lm75 = "1.0.0"
+mipidsi = "0.9.0"
 sht31 = "0.3.2"
 spi-flash = "0.3.0"
