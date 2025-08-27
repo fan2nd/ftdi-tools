@@ -251,6 +251,98 @@ impl SpiBus for FtdiSpiHalfduplex {
         Err(FtdiSpiError::NotSupported("transfer_in_place"))
     }
 }
+/// FTDI SPI bus.
+///
+/// In embedded-hal version 1 this represents an exclusive SPI bus.
+/// Serial Peripheral Interface (SPI) master controller using FTDI MPSSE
+///
+/// Implements full-duplex synchronous serial communication with configurable mode
+pub struct FtdiSpiTx {
+    _pins: [UsedPin; 2],
+    /// Thread-safe handle to FTDI MPSSE controller
+    mtx: Arc<Mutex<FtdiMpsse>>,
+    /// Initial value of SCK line (clock polarity) - determines idle state
+    tck_init_value: bool,
+    /// Whether data is transferred least significant bit (LSB) first
+    is_lsb: bool,
+}
+
+impl FtdiSpiTx {
+    pub fn new(mtx: Arc<Mutex<FtdiMpsse>>) -> Result<Self, FtdiSpiError> {
+        let this = Self {
+            _pins: [
+                UsedPin::new(mtx.clone(), Pin::Lower(0), PinUsage::Spi)?,
+                UsedPin::new(mtx.clone(), Pin::Lower(1), PinUsage::Spi)?,
+            ],
+            mtx: mtx.clone(),
+            tck_init_value: false,
+            is_lsb: false,
+        };
+
+        let mut lock = mtx.lock().unwrap();
+        // default MODE0, SCK(AD0) default 0
+        // set SCK(AD0) and MOSI (AD1) as output pins
+        lock.lower.direction |= SCK_MASK | MOSI_MASK;
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        lock.exec(cmd)?;
+
+        // default msb mode0
+        Ok(this)
+    }
+    /// set spi mode and bitorder
+    pub fn set_mode(&mut self, mode: Mode, is_lsb: bool) -> Result<(), FtdiSpiError> {
+        let mut lock = self.mtx.lock().unwrap();
+        // set SCK polarity
+        match mode {
+            MODE_0 => {
+                lock.lower.value &= !SCK_MASK; // set SCK(AD0) to 0
+                self.tck_init_value = false;
+            }
+            MODE_2 => {
+                lock.lower.value |= SCK_MASK; // set SCK(AD0) to 1
+                self.tck_init_value = true;
+            }
+            _ => {
+                return Err(FtdiSpiError::NotSupported("MODE_1&MODE_3"));
+            }
+        }
+        self.is_lsb = is_lsb;
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        lock.exec(cmd)?;
+        Ok(())
+    }
+}
+
+impl ErrorType for FtdiSpiTx {
+    type Error = FtdiSpiError;
+}
+
+impl SpiBus for FtdiSpiTx {
+    fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
+        let lock = self.mtx.lock().unwrap();
+        let mut cmd = MpsseCmdBuilder::new();
+        cmd.set_gpio_lower(lock.lower.value, lock.lower.direction);
+        cmd.shift_bytes_out(self.tck_init_value, self.is_lsb, words);
+
+        lock.exec(cmd)?;
+
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn read(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
+        Err(FtdiSpiError::NotSupported("read"))
+    }
+    fn transfer(&mut self, _read: &mut [u8], _write: &[u8]) -> Result<(), Self::Error> {
+        Err(FtdiSpiError::NotSupported("transfer"))
+    }
+    fn transfer_in_place(&mut self, _words: &mut [u8]) -> Result<(), Self::Error> {
+        Err(FtdiSpiError::NotSupported("transfer_in_place"))
+    }
+}
 pub struct FtdiSpiDevice {
     _pins: [UsedPin; 4],
     /// Thread-safe handle to FTDI MPSSE controller

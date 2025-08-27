@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -11,9 +12,10 @@ use embedded_graphics::{
     primitives::{PrimitiveStyleBuilder, Rectangle},
     text::Text,
 };
+use embedded_hal_bus::spi::RefCellDevice;
 use ftdi_tools::{
     Interface, Pin, delay::Delay, gpio::FtdiOutputPin, list_all_device, mpsse::FtdiMpsse,
-    spi::FtdiSpiDevice,
+    spi::FtdiSpiTx,
 };
 use mipidsi::{
     Builder, TestImage,
@@ -48,11 +50,14 @@ fn main() -> anyhow::Result<()> {
 
     // 创建 FtdiSpiDevice 实例
     // 这个设备封装了 SPI 总线和片选控制，提供了完整的 SpiDevice 实现
-    let spidevice = FtdiSpiDevice::new(mtx.clone())?;
+    let spibus = RefCell::new(FtdiSpiTx::new(mtx.clone())?);
+    let cs = FtdiOutputPin::new(mtx.clone(), Pin::Lower(3))?;
+    let spidevice = RefCellDevice::new_no_delay(&spibus, cs)?;
     let rst = FtdiOutputPin::new(mtx.clone(), Pin::Lower(4))?;
     let dc = FtdiOutputPin::new(mtx.clone(), Pin::Lower(5))?;
     let mut blk = FtdiOutputPin::new(mtx.clone(), Pin::Lower(6))?;
     blk.set_high()?;
+
     let buffer = &mut [0; 240 * 280 * 2];
     let interface = SpiInterface::new(spidevice, dc, buffer);
 
