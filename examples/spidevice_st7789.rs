@@ -6,8 +6,10 @@ use std::{
 use anyhow::anyhow;
 use eh1::digital::OutputPin;
 use embedded_graphics::{
+    mono_font::{MonoFont, MonoTextStyle, ascii::FONT_10X20},
     prelude::*,
     primitives::{PrimitiveStyleBuilder, Rectangle},
+    text::Text,
 };
 use ftdi_tools::{
     Interface, Pin, delay::Delay, gpio::FtdiOutputPin, list_all_device, mpsse::FtdiMpsse,
@@ -71,11 +73,17 @@ fn main() -> anyhow::Result<()> {
     let style = PrimitiveStyleBuilder::new()
         .fill_color(RgbColor::BLACK)
         .build();
-    Rectangle::new(Point { x: 50, y: 50 }, Size::new(50, 50))
+    Rectangle::new(Point { x: 75, y: 90 }, Size::new(100, 100))
         .into_styled(style)
         .draw(&mut display)
         .unwrap();
     std::thread::sleep(Duration::from_millis(500));
     TestImage::new().draw(&mut display).unwrap();
+
+    // Create a new character style
+    let style = MonoTextStyle::new(&FONT_10X20, RgbColor::BLACK);
+    Text::new("Hello Rust!", Point { x: 26, y: 120 }, style)
+        .draw(&mut display)
+        .unwrap();
     Ok(())
 }
