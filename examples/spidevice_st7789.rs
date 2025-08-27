@@ -22,15 +22,6 @@ use mipidsi::{
     options::{ColorInversion, ColorOrder},
 };
 
-/// 主函数 - SPI Flash 操作程序入口
-///
-/// 此函数实现了使用 FtdiSpiDevice 的 Flash 操作流程:
-/// 1. 初始化 FTDI 设备和 SPI 接口
-/// 2. 创建具有内建片选控制的 SPI 设备
-/// 3. 读取 Flash 设备信息  
-/// 4. 执行全片数据编程
-///
-/// 返回值: anyhow::Result<()> - 操作结果
 fn main() -> anyhow::Result<()> {
     // 初始化日志输出系统
     env_logger::init();
