@@ -320,3 +320,13 @@ mod cmd {
         }
     }
 }
+#[cfg(test)]
+mod test {
+    use crate::swd::{FtdiSwd, SwdAddr};
+
+    #[test]
+    fn read_id() {
+        let request = FtdiSwd::build_request(true, SwdAddr::Dp(0));
+        assert_eq!(request, 0xa5);
+    }
+}
