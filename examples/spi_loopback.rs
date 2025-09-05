@@ -22,17 +22,17 @@ fn main() -> anyhow::Result<()> {
     // 这个设备封装了 SPI 总线和片选控制，提供了完整的 SpiDevice 实现
     let mut spidevice = FtdiSpiDevice::new(mtx)?;
 
-    let max = 600000;
+    let max = 6000000;
+    let mid = 600000;
     let data: Vec<_> = (0..max).map(|x| (x * 7 + 3) as u8).collect();
-    let mut read_back1 = vec![0; 16635];
-    let mut read_back2 = vec![0; max - 16635];
+    let mut read_back = vec![0; max];
+    let (read_back1, read_back2) = read_back.split_at_mut(mid);
     spidevice.transaction(&mut [
-        Operation::Transfer(&mut read_back1, &data[0..16635]),
-        Operation::Transfer(&mut read_back2, &data[16635..max]),
+        Operation::Transfer(read_back1, &data[0..mid]),
+        Operation::Transfer(read_back2, &data[mid..max]),
     ])?;
 
-    read_back1.extend(read_back2);
-    read_back1
+    read_back
         .into_iter()
         .zip(data)
         .for_each(|x| assert_eq!(x.0, x.1));
